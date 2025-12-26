@@ -1,2 +1,0 @@
-# ohc-backend
-OHC BKC
