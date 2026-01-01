@@ -199,6 +199,30 @@ router.post("/bulk", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), upload.
   }
 });
 
+router.put("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
+  try {
+    const updated = await Worker.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
+  try {
+    await Worker.findByIdAndDelete(req.params.id);
+    res.json({ message: "Worker deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
 export default router;
 
 

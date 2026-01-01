@@ -104,4 +104,19 @@ router.post("/bulk", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), upload.
   }
 });
 
+router.put("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
+  const updated = await Medicines.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    { new: true }
+  );
+  res.json(updated);
+});
+
+router.delete("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
+  await Medicines.findByIdAndDelete(req.params.id);
+  res.json({ message: "Deleted" });
+});
+
+
 export default router;
