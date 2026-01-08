@@ -93,6 +93,19 @@ router.get("/completed", async (req, res) => {
   res.json(list);
 });
 
+router.get("/unfit", async(req, res) => {
+  const list = await PreEmployment.find({
+    "status": "Declared Unfit"
+  });
+  res.json(list);
+})
+router.get("/fit", async(req, res) => {
+  const list = await PreEmployment.find({
+    "status": "Declared Fit"
+  });
+  res.json(list);
+})
+
 router.post("/finalize", async (req, res) => {
   try {
     const { preemployment_id, duty_fit, medical_examiner_id, ...reportData } = req.body;
@@ -115,6 +128,8 @@ router.post("/finalize", async (req, res) => {
     preEmp.final_recommendation = reportData.final_recommendation;
     preEmp.systemic_examination = reportData.systemic_examination;
     preEmp.physical_fitness = reportData.physical_fitness;  // Add this
+    preEmp.physical_parameters = reportData.physical_parameters;
+    preEmp.opthalmic_examination = reportData.opthalmic_examination;
     preEmp.medical_examiner_id = medical_examiner_id;
     preEmp.duty_fit = duty_fit;
     preEmp.status = duty_fit ? "Declared Fit" : "Declared Unfit";
