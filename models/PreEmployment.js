@@ -41,13 +41,37 @@ const preEmploymentSchema = new mongoose.Schema({
         body_surface_area: { type: Number }
     },
     systemic_examination: {
-        central_nervous_system: { type: String, default: "CONSCIOUS, WELL ORIENTED, COHERENT WITH NORMAL SPEECH, EMOTION, INTELLIGENCE AND MEMORY. NO CRANIAL NERVE DEFECT / DYSFUNCTION NOTED"},
-        cardiovascular_system: { type: String, default: "LEFT SIDED HEART WITH NORMAL REGULAR RHYTHMIC HEART SOUNDS"},
-        respiratory_system: { type: String, default: "NORMAL CHEST CONTOUR WITH BILATERAL EQUAL EXPANSION. AUSCULTATION REVEALED NORMAL VESICULAR BREATH SOUNDS BILATERALLY, SUGGESTIVE OF GOOD AIR ENTRY (CLEAR LUNGS) WITH NO RESPIRATORY ILLNESS."},
-        gastrointestinal_system: { type: String, default: "NO TENDERNESS OR PALPABLE MASSES SUGGESTIVE OF NIL ORGANOMEGALY."},
-        genitourinary_system: { type: String, default: "NORMAL GENITALIA WITH NO HERNIAS OR NOTABLE TUMOR/S."},
-        musculoskeletal_system: { type: String, default: "NORMAL GAIT, STABLE STATURE WITH NO DEFORMITY OR DISABILITY."}
-    },
+  central_nervous_system: {
+    type: String,
+    default:
+      "Conscious, well oriented, coherent with normal speech, emotion, intelligence, and memory. No cranial nerve defect or dysfunction noted."
+  },
+  cardiovascular_system: {
+    type: String,
+    default:
+      "Left sided heart with normal, regular, rhythmic heart sounds."
+  },
+  respiratory_system: {
+    type: String,
+    default:
+      "Normal chest contour with bilateral equal expansion. Auscultation revealed normal vesicular breath sounds bilaterally, suggestive of good air entry (clear lungs) with no respiratory illness."
+  },
+  gastrointestinal_system: {
+    type: String,
+    default:
+      "No tenderness or palpable masses suggestive of nil organomegaly."
+  },
+  genitourinary_system: {
+    type: String,
+    default:
+      "Normal genitalia with no hernias or notable tumors."
+  },
+  musculoskeletal_system: {
+    type: String,
+    default:
+      "Normal gait and stable stature with no deformity or disability."
+  }
+},
     opthalmic_examination: {
         status: { type: String, enum: ["Done", "Not Done"], default: "Not Done"},
         far_vision: {
