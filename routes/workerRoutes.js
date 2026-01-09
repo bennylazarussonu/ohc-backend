@@ -124,11 +124,58 @@ router.post("/add", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), async (r
   }
 });
 
-router.get("/search", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), async (req, res) => {
-  try {
-    const q = req.query.q;
-    if (!q || q.length < 2) return res.json([]);
+// router.get("/search", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), async (req, res) => {
+//   try {
+//     const q = req.query.q;
+//     if (!q || q.length < 2) return res.json([]);
 
+//     const regex = new RegExp(q, "i");
+
+//     const workers = await Worker.find({
+//       $or: [
+//         { name: regex },
+//         { employee_id: regex },
+//         { fathers_name: regex },
+//         { aadhar_no: regex },
+//         { phone_no: regex },
+//         { designation: regex }
+//       ]
+//     })
+//       // .limit(20)              // 🔥 critical
+//       .sort({ name: 1 });
+
+//     res.json(workers);
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// });
+
+router.get("/search", protect, async (req, res) => {
+  try {
+    const q = req.query.q?.trim();
+    if (!q) return res.json([]);
+
+    // 🔹 Case 1: comma-based structured search
+    if (q.includes(",")) {
+      const parts = q
+        .split(",")
+        .map(p => p.trim())
+        .map(p => (p ? new RegExp(p, "i") : null));
+
+      const [name, empId, father, aadhar, phone] = parts;
+
+      const workers = await Worker.find({
+        ...(name && { name }),
+        ...(empId && { employee_id: empId }),
+        ...(father && { fathers_name: father }),
+        ...(aadhar && { aadhar_no: aadhar }),
+        ...(phone && { phone_no: phone })
+      });
+
+      return res.json(workers);
+    }
+
+    // 🔹 Case 2: single-value smart search (OR)
     const regex = new RegExp(q, "i");
 
     const workers = await Worker.find({
@@ -138,17 +185,18 @@ router.get("/search", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), async 
         { fathers_name: regex },
         { aadhar_no: regex },
         { phone_no: regex },
-        { designation: regex }
+        { designation: regex },
+        { contractor_name: regex }
       ]
-    })
-      // .limit(20)              // 🔥 critical
-      .sort({ name: 1 });
+    });
 
     res.json(workers);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
+
 
 
 
@@ -201,9 +249,24 @@ router.post("/bulk", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), upload.
 
 router.put("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
   try {
-    const updated = await Worker.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+    const updated = await Worker.findOneAndUpdate(
+      { id: Number(req.params.id) }, // ✅ custom id
+      {
+        name: toUpper(req.body.name),
+        employee_id: String(req.body.employee_id || "").trim(),
+        fathers_name: toUpper(req.body.fathers_name),
+        aadhar_no: String(req.body.aadhar_no || "").trim(),
+        gender: toUpper(req.body.gender),
+        dob: req.body.dob ? excelDateToJSDate(req.body.dob) : undefined,
+        residence: req.body.residence ? String(req.body.residence): "",
+        phone_no: String(req.body.phone_no || "").trim(),
+        designation: toUpper(req.body.designation),
+        contractor_name: toUpper(req.body.contractor_name),
+        date_of_joining: req.body.date_of_joining
+          ? excelDateToJSDate(req.body.date_of_joining)
+          : undefined,
+        identification_marks: req.body.identification_marks
+      },
       { new: true }
     );
     res.json(updated);
