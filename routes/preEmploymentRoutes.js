@@ -87,7 +87,8 @@ router.put("/:id/vision", async (req, res) => {
 router.get("/completed", async (req, res) => {
   const list = await PreEmployment.find({
     "physical_parameters.status": "Done",
-    "opthalmic_examination.status": "Done"
+    "opthalmic_examination.status": "Done",
+    "status": "On-Going"
   });
 
   res.json(list);
