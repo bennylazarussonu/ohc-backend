@@ -122,6 +122,18 @@ router.post("/finalize", async (req, res) => {
     }
 
     // ✅ Fix 2: Use req.body fields directly
+    preEmp.name = reportData.name;
+    preEmp.fathers_name = reportData.fathers_name;
+    preEmp.employee_id = reportData.employee_id;
+    preEmp.aadhar_no = reportData.aadhar_no;
+    preEmp.gender = reportData.aadhar_no;
+    preEmp.dob = reportData.dob;
+    preEmp.residence = reportData.residence;
+    preEmp.phone_no = reportData.phone_no;
+    preEmp.designation = reportData.designation;
+    preEmp.contractor_name = reportData.contractor_name;
+    preEmp.date_of_joining = reportData.date_of_joining;
+    preEmp.identification_marks = reportData.identification_marks;
     preEmp.presentation = reportData.presentation;
     preEmp.physical_examination = reportData.physical_examination;
     preEmp.general_examination = reportData.general_examination;
