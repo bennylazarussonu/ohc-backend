@@ -138,11 +138,11 @@ router.post("/renew", protect, async (req, res) => {
         await session.commitTransaction();
         // session.endSession();
 
-        // res.status(201).json({
-        //     message: "ID renewed successfully",
-        //     renewal: renewal[0],
-        //     worker,
-        // });
+        res.status(201).json({
+            message: "ID renewed successfully",
+            renewal: renewal[0],
+            worker,
+        });
     } catch (err) {
         console.log(err);
         if(session) await session.abortTransaction();
