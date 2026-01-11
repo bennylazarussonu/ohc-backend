@@ -17,7 +17,7 @@ const workerSchema = new mongoose.Schema({
     date_of_joining: { type: Date},
     identification_marks: { type: [String]},
     last_id_renewal_date: { type: Date },
-    id_status: {type: String },
+    id_status: {type: String, enum: ["Expired", "Active"]},
     preemployment_id: { type: Number }
 });
 

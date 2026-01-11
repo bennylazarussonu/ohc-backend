@@ -5,7 +5,7 @@ import Worker from '../models/Worker.js';
 
 const router = express.Router();
 
-router.post("/add", async (req, res) => {
+router.post("/add", protect, async (req, res) => {
   try {
     const record = await PreEmployment.create({
       ...req.body,
@@ -19,7 +19,7 @@ router.post("/add", async (req, res) => {
 });
 
 
-router.get("/on-going", async (req, res) => {
+router.get("/on-going", protect, async (req, res) => {
   const list = await PreEmployment.find({ 
     $or: [
       {"opthalmic_examination.status" : "Not Done"},
@@ -31,7 +31,7 @@ router.get("/on-going", async (req, res) => {
   res.json(list);
 });
 
-router.get("/vitals/:id", async (req, res) => {
+router.get("/vitals/:id", protect, async (req, res) => {
   try{
   const vitals= await PreEmployment.findOne({id: req.params.id}).select("id physical_parameters");
   res.json(vitals);
@@ -40,7 +40,7 @@ router.get("/vitals/:id", async (req, res) => {
   }
 });
 
-router.get("/vision/:id", async (req, res) => {
+router.get("/vision/:id", protect, async (req, res) => {
   try{
     const vision = await PreEmployment.findOne({id: req.params.id}).select("id opthalmic_examination");
     res.json(vision);
@@ -49,7 +49,7 @@ router.get("/vision/:id", async (req, res) => {
   }
 });
 
-router.put("/:id/vitals", async (req, res) => {
+router.put("/:id/vitals", protect, async (req, res) => {
   console.log("Vitals payload: ", req.body);
   await PreEmployment.updateOne(
     { id: req.params.id },
@@ -67,7 +67,7 @@ router.put("/:id/vitals", async (req, res) => {
 });
 
 
-router.put("/:id/vision", async (req, res) => {
+router.put("/:id/vision", protect, async (req, res) => {
   await PreEmployment.updateOne(
     { id: req.params.id },
     {
@@ -84,7 +84,7 @@ router.put("/:id/vision", async (req, res) => {
 });
 
 
-router.get("/completed", async (req, res) => {
+router.get("/completed", protect, async (req, res) => {
   const list = await PreEmployment.find({
     "physical_parameters.status": "Done",
     "opthalmic_examination.status": "Done",
@@ -94,20 +94,20 @@ router.get("/completed", async (req, res) => {
   res.json(list);
 });
 
-router.get("/unfit", async(req, res) => {
+router.get("/unfit", protect, async(req, res) => {
   const list = await PreEmployment.find({
     "status": "Declared Unfit"
   });
   res.json(list);
 })
-router.get("/fit", async(req, res) => {
+router.get("/fit", protect, async(req, res) => {
   const list = await PreEmployment.find({
     "status": "Declared Fit"
   });
   res.json(list);
 })
 
-router.post("/finalize", async (req, res) => {
+router.post("/finalize", protect, async (req, res) => {
   try {
     const { preemployment_id, duty_fit, medical_examiner_id, ...reportData } = req.body;
 
@@ -166,7 +166,9 @@ router.post("/finalize", async (req, res) => {
           contractor_name: preEmp.contractor_name,
           date_of_joining: preEmp.date_of_joining,
           identification_marks: preEmp.identification_marks,
-          preemployment_id: preEmp.id  // Use Mongo _id here
+          preemployment_id: preEmp.id, // Use Mongo _id here
+          last_id_renewal_date: preEmp.date_of_examination,
+          id_status: "Active"
         });
         await worker.save();
       }
