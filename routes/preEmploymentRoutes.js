@@ -186,6 +186,31 @@ router.post("/finalize", protect, async (req, res) => {
   }
 });
 
+router.put("/send-back", protect, async(req, res) => {
+  try{
+      const {preemployment_id, ...reportData} = req.body;
+      console.log(preemployment_id);
+      console.log(reportData);
+
+  const preEmp = await PreEmployment.findOne({id: preemployment_id});
+  // console.log(preEmp);
+  if (!preEmp) {
+      return res.status(404).json({ message: "Pre-employment record not found" });
+    }
+
+    preEmp.physical_parameters['status'] = "Not Done";
+    preEmp.opthalmic_examination['status'] = "Not Done";
+    await preEmp.save();
+    res.json({
+      message: "Sent back to Examination Parameters",
+      status: preEmp.status,
+    });
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+})
+
 
 export default router;
 
