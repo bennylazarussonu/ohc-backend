@@ -12,6 +12,9 @@ import preEmploymentRoutes from "./routes/preEmploymentRoutes.js";
 import idRenewalRoutes from './routes/idRenewalRoutes.js';
 import { startWorkerExpiryJob } from './jobs/expireWorker.js';
 import dashboardsRoutes from './routes/dashboardRoutes.js';
+import buListRoutes from './routes/buListRoutes.js';
+import procurementRoutes from './routes/procurementRoutes.js';
+import stockRoutes from "./routes/stockRoutes.js";
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -30,6 +33,9 @@ app.use("/api/doctors", doctorRoutes);
 app.use("/api/pre-employment", preEmploymentRoutes);
 app.use("/api/id-renewal", idRenewalRoutes);
 app.use("/api/dashboard", dashboardsRoutes);
+app.use("/api/bulist", buListRoutes);
+app.use("/api/procurement", procurementRoutes);
+app.use("/api/stock", stockRoutes);
 
 startWorkerExpiryJob();
 

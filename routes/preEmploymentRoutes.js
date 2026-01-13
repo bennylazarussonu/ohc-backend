@@ -21,10 +21,17 @@ router.post("/add", protect, async (req, res) => {
 
 router.get("/on-going", protect, async (req, res) => {
   const list = await PreEmployment.find({ 
-    $or: [
-      {"opthalmic_examination.status" : "Not Done"},
-      {"physical_parameters.status": "Not Done"}
-    ]
+    $and: [
+      { 
+        $or: [
+          {"opthalmic_examination.status" : "Not Done"},
+          {"physical_parameters.status": "Not Done"},
+        ]
+      },
+      {
+        "status": "On-Going"
+      }
+    ],
   })
     .select("id name aadhar_no physical_parameters.status opthalmic_examination.status");
 
@@ -211,6 +218,59 @@ router.put("/send-back", protect, async(req, res) => {
   }
 })
 
+router.put("/cancel", protect, async(req, res) => {
+  try{
+    const {preemployment_id, ...reportData} = req.body;
+
+    const preEmp = await PreEmployment.findOne({id: preemployment_id});
+    if (!preEmp) {
+      return res.status(404).json({ message: "Pre-employment record not found" });
+    }
+    preEmp.status = "Cancelled";
+    await preEmp.save();
+    res.json({
+      message: "Status set to Cancelled",
+      status: preEmp.status,
+    });
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+router.get("/cancelled", protect, async (req, res) => {
+  try{
+    const list = await PreEmployment.find({
+      status: "Cancelled"
+    });
+
+    res.json(list);
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+router.put("/revoke", protect, async(req, res) => {
+    try{
+      const {preemployment_id, ...reportData} = req.body;
+
+      const preEmp = await PreEmployment.findOne({id: preemployment_id});
+      if (!preEmp) {
+        return res.status(404).json({ message: "Pre-employment record not found" });
+      }
+
+      preEmp.status = "On-Going";
+      await preEmp.save();
+      res.json({
+        message: "Revoked from Cancellation",
+        status: preEmp.status,
+      });
+    }catch(err){
+      console.error(err);
+      res.status(500).json({ message: "Server error", error: err.message });
+    }
+})
 
 export default router;
 

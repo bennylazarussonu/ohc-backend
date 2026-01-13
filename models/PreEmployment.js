@@ -16,7 +16,7 @@ const preEmploymentSchema = new mongoose.Schema({
     date_of_joining: { type: Date},
     identification_marks: { type: [String] },
     date_of_examination: { type: Date, default: Date.now, required: true },
-    status: { type: String, enum: ["On-Going", "Declared Fit", "Declared Unfit"]},
+    status: { type: String, enum: ["On-Going", "Declared Fit", "Declared Unfit", "Cancelled"]},
     presentation: { type: String, default: "Individual presented for health-check at the workplace (First Aid Unit, BKC, Mumbai - 400051) with no significant complaint/s or past illnesses like, epilepsy, mental depression, height phobia, headache,  vertigo,  insomnia, anxiety or drug allergy."},
     physical_examination: { type: String, default: "Examination of the head eyes, ears, nose and throat revealed no abnormality, as follows.  The pupils were of equal size with no squint or nystagmus and reacting simultaneously to light and accomodation. The external ears were normal, with no otorrhoea. Nose had no inflammed turbinales, polyp or septal deviation.The gums (gingival lining) were normal with proper teeth contour devoid of dentures. No congestion or tonsillitis in throat with no significant lymphadenopathy on the neck."},
     general_examination: {type: String, default: "Individual with normal physical appearance, stature & gait. Noted to be adequately hydrated with no fever, pallor, oedema, cyanosis, clubbing, icterus, raised venous pulse or any visible skin lesion. No sign of any communicable/ contagious disease noted."},

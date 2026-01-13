@@ -6,6 +6,7 @@ const opdSchema = new mongoose.Schema({
     worker_id: { type: Number, required: true, index: true },
     presenting_complaint: { type: String },
     exam_findings_and_clinical_notes: { type: String },
+    weight: { type: String },
     temperature: { type: String },
     heart_rate: { type: Number },
     blood_pressure: { type: String },
