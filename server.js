@@ -15,6 +15,7 @@ import dashboardsRoutes from './routes/dashboardRoutes.js';
 import buListRoutes from './routes/buListRoutes.js';
 import procurementRoutes from './routes/procurementRoutes.js';
 import stockRoutes from "./routes/stockRoutes.js";
+import dispenseRoutes from "./routes/dispenseRoutes.js";
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -36,6 +37,7 @@ app.use("/api/dashboard", dashboardsRoutes);
 app.use("/api/bulist", buListRoutes);
 app.use("/api/procurement", procurementRoutes);
 app.use("/api/stock", stockRoutes);
+app.use("/api/dispense", dispenseRoutes);
 
 startWorkerExpiryJob();
 

@@ -18,6 +18,8 @@ const opdSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now },
     treating_doctor_id: { type: Number },
     other_recommendations: { type: String },
+    medicine_dispensed: { type: Boolean, default: false},
+    dispense_status: { type: String, enum: ["Fully", "Partially", "None"], default: "None"}
 });
 
 opdSchema.pre("save", async function () {
