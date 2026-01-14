@@ -2,6 +2,7 @@ import express from "express";
 import OPD from "../models/OPD.js";
 import Worker from "../models/Worker.js";
 import Doctor from "../models/Doctor.js";
+import Prescription from "../models/Prescriptions.js";
 import { protect, allowRoles } from "../middlewares/auth.js";
 
 const router = express.Router();
@@ -74,5 +75,35 @@ router.post("/add", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => 
     res.status(500).json({ message: err.message });
   }
 });
+
+router.put("/:id", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+  const opd = await OPD.findOneAndUpdate(
+    { id: Number(req.params.id) },
+    req.body,
+    { new: true }
+  );
+  res.json(opd);
+});
+
+router.get("/:id/full", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+  try {
+    const opdId = Number(req.params.id);
+
+    const opd = await OPD.findOne({ id: opdId });
+    if (!opd) {
+      return res.status(404).json({ message: "OPD not found" });
+    }
+
+    const prescriptions = await Prescription.find({ opd_id: opdId });
+
+    res.json({
+      opd,
+      prescriptions
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 export default router;

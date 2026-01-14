@@ -284,6 +284,20 @@ router.delete("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
   }
 });
 
+router.get("/:id", protect, async (req, res) => {
+  try {
+    const worker = await Worker.findOne({ id: Number(req.params.id) });
+
+    if (!worker) {
+      return res.status(404).json({ message: "Worker not found" });
+    }
+
+    res.json(worker);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 
 export default router;

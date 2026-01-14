@@ -2,6 +2,7 @@ import express from 'express';
 import Prescription from '../models/Prescriptions.js';
 import Worker from '../models/Worker.js';
 import Medicines from '../models/Medicines.js';
+import Counter from '../models/Counter.js';
 import OPD from '../models/OPD.js';
 import { protect, allowRoles } from '../middlewares/auth.js';
 
@@ -119,5 +120,55 @@ router.post('/add', protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => 
     res.status(500).json({ message: err.message });
   }
 });
+
+router.put(
+  "/opd/:opdId",
+  protect,
+  async (req, res) => {
+    try {
+      const opd_id = Number(req.params.opdId);
+      const rows = req.body;
+
+      if (!Array.isArray(rows)) {
+        return res.status(400).json({ message: "Invalid payload" });
+      }
+
+      // 1️⃣ Delete old prescriptions for this OPD
+      await Prescription.deleteMany({ opd_id });
+
+      if (rows.length === 0) {
+        return res.json([]);
+      }
+
+      // 2️⃣ Reserve new IDs using Counter
+      const count = rows.length;
+
+      const counter = await Counter.findOneAndUpdate(
+        { name: "prescription_id" },
+        { $inc: { seq: count } },
+        { new: true, upsert: true }
+      );
+
+      const startId = counter.seq - count + 1;
+
+      // 3️⃣ Inject IDs into each prescription row
+      const rowsWithIds = rows.map((row, index) => ({
+        ...row,
+        id: startId + index
+      }));
+
+      // 4️⃣ Insert cleanly
+      const saved = await Prescription.insertMany(rowsWithIds);
+
+      res.json(saved);
+    } catch (err) {
+      console.error("Prescription replace error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+
+
 
 export default router;
