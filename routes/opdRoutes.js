@@ -7,9 +7,84 @@ import { protect, allowRoles } from "../middlewares/auth.js";
 
 const router = express.Router();
 
-router.get("/", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.get("/finished", protect, async (req, res) => {
   try {
-    const opds = await OPD.find().sort({ id: 1 });
+    const opds = await OPD.aggregate([
+      {
+        $match: {
+          status: "Finished"
+        }
+      },
+      {
+        $lookup: {
+          from: "workers",
+          localField: "worker_id",
+          foreignField: "id",
+          as: "worker"
+        }
+      },
+      { $unwind: "$worker" },
+      {
+        $project: {
+          id: 1,
+          created_at: 1,
+          presenting_complaint: 1,
+          status: 1,
+          case_dealt_by: 1,
+          "worker.id": 1,
+          "worker.name": 1,
+          "worker.employee_id": 1,
+          "worker.phone_no": 1,
+          "worker.designation": 1,
+          "worker.contractor_name": 1,
+          "worker.aadhar_no": 1
+        }
+      },
+      { $sort: { id: -1 } }
+    ]);
+
+    res.json(opds);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get("/for-consultation", protect, async (req, res) => {
+  try {
+    const opds = await OPD.aggregate([
+      {
+        $match: {
+          status: "For Consultation"
+        }
+      },
+      {
+        $lookup: {
+          from: "workers",
+          localField: "worker_id",
+          foreignField: "id",
+          as: "worker"
+        }
+      },
+      { $unwind: "$worker" },
+      {
+        $project: {
+          id: 1,
+          created_at: 1,
+          presenting_complaint: 1,
+          status: 1,
+          case_dealt_by: 1,
+          "worker.id": 1,
+          "worker.name": 1,
+          "worker.employee_id": 1,
+          "worker.phone_no": 1,
+          "worker.designation": 1,
+          "worker.contractor_name": 1,
+          "worker.aadhar_no": 1
+        }
+      },
+      { $sort: { id: -1 } }
+    ]);
+
     res.json(opds);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -17,7 +92,7 @@ router.get("/", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
 });
 
 // opdRoutes.js
-router.get("/suggestions", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.get("/suggestions", protect, async (req, res) => {
   try {
     const { type, q } = req.query; // type = complaint | diagnosis
 
@@ -51,7 +126,7 @@ router.get("/suggestions", protect, allowRoles("ADMIN", "DOCTOR"), async (req, r
 });
 
 
-router.post("/add", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.post("/add", protect, async (req, res) => {
   try {
     const { worker_id, treating_doctor_id } = req.body;
 

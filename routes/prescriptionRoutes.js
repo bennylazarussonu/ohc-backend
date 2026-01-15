@@ -57,7 +57,7 @@ router.get("/prescription-template", protect, allowRoles("ADMIN", "DOCTOR"), asy
 });
 
 
-router.post('/add', protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.post('/add', protect, async (req, res) => {
     try {
     const prescriptions = req.body; // expect array of rows
 

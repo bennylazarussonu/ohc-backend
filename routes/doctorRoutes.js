@@ -39,7 +39,7 @@ async function ensureUniqueUserId(baseUserId) {
 /**
  * GET all doctors
  */
-router.get("/", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.get("/", protect, async (req, res) => {
   try {
     const doctors = await Doctor.find().sort({ name: 1 });
     res.json(doctors);

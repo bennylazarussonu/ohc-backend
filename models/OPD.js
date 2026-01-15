@@ -19,7 +19,12 @@ const opdSchema = new mongoose.Schema({
     treating_doctor_id: { type: Number },
     other_recommendations: { type: String },
     medicine_dispensed: { type: Boolean, default: false},
-    dispense_status: { type: String, enum: ["Fully", "Partially", "None"], default: "None"}
+    dispense_status: { type: String, enum: ["Fully", "Partially", "None"], default: "None"},
+    case_dealt_by: {
+      role: { type: String },
+      userId: { type: String },
+    },
+    status: { type: String, enum: ["For Consultation", "Finished"]}
 });
 
 opdSchema.pre("save", async function () {
