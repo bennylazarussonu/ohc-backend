@@ -9,10 +9,12 @@ const itemSchema = new mongoose.Schema({
 const dispenseSchema = new mongoose.Schema({
     id: { type: Number, unique: true },
     opd_id: { type: Number },
-    prescription_id: { type: Number },
     dispensed_items: [itemSchema],
     dispensed_to_worker_id: { type: Number },
-    dispensed_by: { type: String },
+    dispensed_by: {
+        role: { type: String },
+        userId: { type: String }
+    },
     dispensed_on: { type: Date, default: Date.now, required: true }
 });
 

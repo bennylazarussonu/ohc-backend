@@ -71,4 +71,18 @@ router.get("/", protect, async (req, res) => {
     }
 });
 
+// stockRoutes.js
+router.get("/raw", protect, async (req, res) => {
+  try {
+    const stock = await Stock.find({})
+      .sort({ item_name: 1, expiry_date: 1 });
+
+    res.json(stock);
+  } catch (err) {
+    console.error("Raw stock fetch error:", err);
+    res.status(500).json({ message: "Failed to fetch raw stock" });
+  }
+});
+
+
 export default router;
