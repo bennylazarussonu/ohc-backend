@@ -17,6 +17,9 @@ import procurementRoutes from './routes/procurementRoutes.js';
 import stockRoutes from "./routes/stockRoutes.js";
 import dispenseRoutes from "./routes/dispenseRoutes.js";
 import adjustmentRoutes from "./routes/adjustmentRoutes.js";
+import notificationsRoute from "./routes/notificationRoutes.js";
+import Notifications from './models/Notifications.js';
+
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -40,6 +43,7 @@ app.use("/api/procurement", procurementRoutes);
 app.use("/api/stock", stockRoutes);
 app.use("/api/dispense", dispenseRoutes);
 app.use("/api/adjustment", adjustmentRoutes);
+app.use("/api/notifications", notificationsRoute);
 
 startWorkerExpiryJob();
 
@@ -53,6 +57,26 @@ app.get("/", (request, response) => {
 
 mongoose.connect(process.env.MONGODB_URI).then(() => {
     console.log("Connected to MongoDB");
+    // setInterval(async () => {
+    //     try {
+    //         const result = await Notifications.updateMany(
+    //             {
+    //                 status: "active",
+    //                 expires_at: { $lt: new Date() }
+    //             },
+    //             {
+    //                 status: "inactive",
+    //                 expired_at: new Date()
+    //             }
+    //         );
+
+    //         if (result.modifiedCount > 0) {
+    //             console.log(`Expired ${result.modifiedCount} notifications`);
+    //         }
+    //     } catch (err) {
+    //         console.error("Notification expiry job error:", err);
+    //     }
+    // }, 60000);
 }).catch((error) => {
     console.error("Error connecting to MongoDB:", error);
 });
