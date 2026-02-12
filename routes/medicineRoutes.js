@@ -3,6 +3,7 @@ import multer from "multer";
 import xlsx from "xlsx";
 import Medicines from "../models/Medicines.js";
 import Counter from "../models/Counter.js";
+import BUList from "../models/BUList.js";
 import { allowRoles, protect } from "../middlewares/auth.js";
 
 const router = express.Router();
@@ -116,6 +117,74 @@ router.put("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
 router.delete("/:id", protect, allowRoles("ADMIN"), async (req, res) => {
   await Medicines.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
+});
+
+router.put("/edit-by-id/:medicineId", protect, allowRoles("ADMIN"), async (req, res) => {
+  try {
+    const { medicineId } = req.params;
+    const {
+      drug_name_and_dose,
+      category,
+      sub_category,
+      brands
+    } = req.body;
+
+    // 1️⃣ Update Medicines
+    const updatedMedicine = await Medicines.findOneAndUpdate(
+      { id: medicineId },
+      {
+        drug_name_and_dose: drug_name_and_dose.trim(),
+        category,
+        sub_category,
+        brands
+      },
+      { new: true }
+    );
+
+    if (!updatedMedicine) {
+      return res.status(404).json({ message: "Medicine not found" });
+    }
+
+    // 2️⃣ Sync BUList
+    await BUList.findOneAndUpdate(
+      { medicine_id: medicineId },
+      {
+        item_name: updatedMedicine.drug_name_and_dose,
+        category: updatedMedicine.category,
+        sub_category: updatedMedicine.sub_category,
+        brands: updatedMedicine.brands
+      }
+    );
+
+    res.json({ message: "Medicine & BUList updated", updatedMedicine });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Update failed" });
+  }
+});
+
+router.get("/search", protect, async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) return res.json([]);
+
+    // Get medicine_ids already in BUList
+    const existingBUItems = await BUList.find({}, { medicine_id: 1 });
+    const existingIds = existingBUItems.map(b => b.medicine_id);
+
+    const medicines = await Medicines.find({
+      drug_name_and_dose: { $regex: query, $options: "i" },
+      id: { $nin: existingIds }
+    }).limit(10);
+
+    res.json(medicines);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Search failed" });
+  }
 });
 
 

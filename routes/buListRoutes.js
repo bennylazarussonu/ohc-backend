@@ -101,6 +101,70 @@ router.get("/", protect, async (req, res) => {
   res.json(list);
 });
 
+router.post("/add-item", protect, allowRoles("ADMIN"), async (req, res) => {
+  try {
+    const {
+  drug_name_and_dose,
+  category,
+  sub_category,
+  brands,
+  medicine_id
+} = req.body;
 
+
+    // 1️⃣ Check if medicine exists
+    let medicine;
+
+if (medicine_id) {
+  medicine = await Medicines.findOne({ id: medicine_id });
+} else {
+  medicine = await Medicines.findOne({
+    drug_name_and_dose: {
+      $regex: `^${drug_name_and_dose.trim()}$`,
+      $options: "i"
+    }
+  });
+}
+
+
+
+    // 2️⃣ If not → create
+    if (!medicine) {
+      medicine = new Medicines({
+        drug_name_and_dose,
+        category,
+        sub_category,
+        brands
+      });
+
+      await medicine.save();
+    }
+
+    const existsInBU = await BUList.findOne({ medicine_id: medicine.id });
+if (existsInBU) {
+  return res.status(400).json({ message: "Already exists in BUList" });
+}
+
+
+
+    // 3️⃣ Add to BUList
+    const buItem = new BUList({
+      item_name: medicine.drug_name_and_dose,
+      medicine_id: medicine.id,
+      category: medicine.category,
+      sub_category: medicine.sub_category,
+      brands: medicine.brands
+    });
+
+    await buItem.save();
+    console.log("BUList item saved:", buItem);
+
+    res.json({ message: "Item added to BUList", buItem });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Add failed" });
+  }
+});
 
 export default router;
