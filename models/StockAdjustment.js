@@ -8,7 +8,8 @@ const consumedItemSchema = new mongoose.Schema({
   brand: { type: String },
   consumed_units: { type: Number, required: true },
   from_date: { type: Date, required: true },
-  to_date: { type: Date, required: true }
+  to_date: { type: Date, required: true },
+  remarks: { type: String, enum: ["Consumed", "Lost"] }
 });
 
 const stockAdjustmentSchema = new mongoose.Schema({

@@ -33,14 +33,16 @@ router.post("/reconcile-opening", protect, async (req, res) => {
 
       if (consumedUnits > 0) {
         adjustedItems.push({
-          stock_id: stock.id,
-          medicine_id: stock.medicine_id,
-          item_name: stock.item_name,
-          brand: stock.brand,
-          consumed_units: consumedUnits,
-          from_date,
-          to_date
-        });
+  stock_id: stock.id,
+  medicine_id: stock.medicine_id,
+  item_name: stock.item_name,
+  brand: stock.brand,
+  consumed_units: consumedUnits,
+  from_date,
+  to_date,
+  remarks: item.remarks || "Consumed"
+});
+
       }
     }
 
@@ -57,7 +59,7 @@ router.post("/reconcile-opening", protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: "Opening stock reconciled successfully",
+      message: "Stock Adjusted successfully",
       adjustment
     });
 
