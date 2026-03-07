@@ -9,6 +9,10 @@ const workerSchema = new mongoose.Schema({
     aadhar_no: { type: String},
     gender: {type: String, uppercase: true, default: "MALE"},
     dob: { type: Date },
+    blood: {
+      group: { type: String, uppercase: true },
+      rh_factor: { type: String, enum: ["POSITIVE", 'NEGATIVE'], uppercase: true}
+    },
     residence: { type: String },
     weight: {type: Number },
     phone_no: { type: String },

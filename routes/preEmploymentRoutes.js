@@ -114,6 +114,52 @@ router.get("/fit", protect, async(req, res) => {
   res.json(list);
 })
 
+router.get("/empty-blood-group", protect, async(req, res) => {
+  const list = await PreEmployment.find({
+    "blood.status": "Not Done",
+    "status": "Declared Fit"
+  });
+  res.json(list);
+})
+
+router.put("/blood-group/:id", protect, async (req, res) => {
+  try {
+    const { group, rh_factor } = req.body;
+
+    const preEmp = await PreEmployment.findOne({ id: req.params.id });
+
+    if (!preEmp) {
+      return res.status(404).json({ message: "Record not found" });
+    }
+
+    // Update PreEmployment
+    preEmp.blood.group = group;
+    preEmp.blood.rh_factor = rh_factor;
+    preEmp.blood.status = "Done";
+
+    await preEmp.save();
+
+    // Update Worker
+    const worker = await Worker.findOne({ preemployment_id: preEmp.id });
+
+    if (worker) {
+      worker.blood.group = group;
+      worker.blood.rh_factor = rh_factor;
+      await worker.save();
+    }
+
+    res.json({
+      message: "Blood group saved successfully",
+      preEmployment: preEmp,
+      workerUpdated: !!worker
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post("/finalize", protect, async (req, res) => {
   try {
     const { preemployment_id, duty_fit, medical_examiner_id, ...reportData } = req.body;

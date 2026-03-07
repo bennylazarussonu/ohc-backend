@@ -14,6 +14,11 @@ const preEmploymentSchema = new mongoose.Schema({
     designation: { type: String, uppercase: true },
     contractor_name: { type: String, uppercase: true },
     date_of_joining: { type: Date},
+    blood: {
+        status: {type: String, enum: ["Done", "Not Done"], default: "Not Done"},
+        group: { type: String, uppercase: true },
+        rh_factor: { type: String, enum: ["POSITIVE", 'NEGATIVE'], uppercase: true}
+    },
     identification_marks: { type: [String] },
     date_of_examination: { type: Date, default: Date.now, required: true },
     status: { type: String, enum: ["On-Going", "Declared Fit", "Declared Unfit", "Cancelled"]},
