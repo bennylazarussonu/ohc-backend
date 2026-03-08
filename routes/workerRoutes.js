@@ -60,21 +60,29 @@ function excelDateToJSDate(value) {
 
 router.put("/temp-blood", async(req, res) => {
   try {
-    const workers = await Worker.updateMany({
-      blood: {
-        group: "",
-        rh_factor: ""
-      }
-    });
+    const workers = await Worker.updateMany(
+      {},
+      {
+        $set:{
+          blood: {
+            group: "",
+            rh_factor: ""
+          }
+        }
+      });
     res.json({ message: "Temporary blood field update successful" });
 
-    const preemps = await PreEmployment.updateMany({
-      blood: {
-        status: "Not Done",
-        group: "",
-        rh_factor: ""
-      }
-    });
+    const preemps = await PreEmployment.updateMany(
+      {},
+      {
+        $set:{
+          blood: {
+            status: "Not Done",
+            group: "",
+            rh_factor: ""
+          }
+        }
+      });
     res.json({ message: "Temporary blood field update successful" });
   } catch (err) {
     res.status(500).json({ message: err.message });
