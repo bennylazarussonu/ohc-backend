@@ -122,6 +122,14 @@ router.get("/empty-blood-group", protect, async(req, res) => {
   res.json(list);
 })
 
+router.get("/blood-group", protect, async(req, res) => {
+  const list = await PreEmployment.find({
+     "blood.status": "Done",
+      "status": "Declared Fit"
+  });
+  res.json(list);
+})
+
 router.put("/blood-group/:id", protect, async (req, res) => {
   try {
     const { group, rh_factor } = req.body;
