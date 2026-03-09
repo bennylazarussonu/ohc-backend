@@ -19,6 +19,7 @@ import dispenseRoutes from "./routes/dispenseRoutes.js";
 import adjustmentRoutes from "./routes/adjustmentRoutes.js";
 import notificationsRoute from "./routes/notificationRoutes.js";
 import Notifications from './models/Notifications.js';
+import fcaccRoutes from './routes/fcaccRoutes.js';
 
 
 import dotenv from 'dotenv';
@@ -44,6 +45,7 @@ app.use("/api/stock", stockRoutes);
 app.use("/api/dispense", dispenseRoutes);
 app.use("/api/adjustment", adjustmentRoutes);
 app.use("/api/notifications", notificationsRoute);
+app.use("/api/fcacc", fcaccRoutes);
 
 startWorkerExpiryJob();
 
