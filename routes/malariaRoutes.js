@@ -1,9 +1,34 @@
 import express from "express";
 import Malaria from "../models/Malaria.js";
 import Worker from "../models/Worker.js";
+import {protect, allowRoles} from "../middlewares/auth.js";
 import PreEmployment from "../models/PreEmployment.js";
 
 const router = express.Router();
+
+router.get("/", protect, async (req, res) => {
+  try {
+
+    const malariaTests = await Malaria.aggregate([
+      {
+        $lookup: {
+          from: "workers",          // collection name in MongoDB
+          localField: "worker_id",  // malaria field
+          foreignField: "id",       // worker field
+          as: "worker"
+        }
+      },
+      {
+        $unwind: "$worker"
+      }
+    ]);
+
+    res.json(malariaTests);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 router.get("/workers/all", async (req, res) => {
     try {
