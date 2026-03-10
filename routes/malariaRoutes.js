@@ -1,6 +1,7 @@
 import express from "express";
 import Malaria from "../models/Malaria.js";
 import Worker from "../models/Worker.js";
+import PreEmployment from "../models/PreEmployment.js";
 
 const router = express.Router();
 
@@ -37,7 +38,11 @@ router.get("/worker/:id", async (req, res) => {
     try {
         const worker_id = req.params.id;
         const tests_list = await Malaria.find({ worker_id });
-        res.json(tests_list);
+        // console.log(tests_list);
+        const worker = await Worker.findOne({id: worker_id}, {preemployment_id: 1});
+        const preemp = await PreEmployment.findOne({id: worker.preemployment_id}, {date_of_examination: 1});
+        console.log({tests_list, preemp});
+        res.json({tests_list, preemp});
     }catch(err){
         console.error(err);
         res.status(500).json({ message: err.message });
