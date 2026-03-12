@@ -21,6 +21,7 @@ import notificationsRoute from "./routes/notificationRoutes.js";
 import Notifications from './models/Notifications.js';
 import fcaccRoutes from './routes/fcaccRoutes.js';
 import malariaRoutes from './routes/malariaRoutes.js';
+import zoneRoutes from "./routes/zoneRoutes.js";
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -47,6 +48,7 @@ app.use("/api/adjustment", adjustmentRoutes);
 app.use("/api/notifications", notificationsRoute);
 app.use("/api/fcacc", fcaccRoutes);
 app.use("/api/malaria", malariaRoutes);
+app.use("/api/fab/zones", zoneRoutes);
 
 startWorkerExpiryJob();
 
