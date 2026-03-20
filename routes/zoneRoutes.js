@@ -156,13 +156,10 @@ if (available < quantity) {
 });
 
 // routes/medicines.js
-
 router.get("/search-stock", async (req,res)=>{
-
   const query = req.query.query || "";
 
   const medicines = await Stock.aggregate([
-
     {
       $match:{
         units:{$gt:0}
@@ -330,6 +327,46 @@ router.post("/:zoneId/add", async (req,res)=>{
   }
 
   res.json({message:"Stock added to zone"});
+});
+
+router.get("/:zoneId/consumption", async (req,res)=>{
+
+  const zoneId = Number(req.params.zoneId);
+
+  const logs = await ZoneConsumptions.aggregate([
+
+    {
+      $match:{ zone_id: zoneId }
+    },
+
+    {
+      $lookup:{
+        from:"medicines",
+        localField:"medicine_id",
+        foreignField:"id",
+        as:"medicine"
+      }
+    },
+
+    { $unwind:"$medicine" },
+
+    {
+      $project:{
+        _id:0,
+        medicine_id:1,
+        item_name:"$medicine.drug_name_and_dose",
+        quantity:1,
+        reason:1,
+        date:1
+      }
+    },
+
+    { $sort:{ date:-1 } }
+
+  ]);
+
+  res.json(logs);
+
 });
 
 export default router;
