@@ -5,6 +5,35 @@ import Worker from "../models/Worker.js";
 
 const router = express.Router();
 
+router.get("/fitness-clearance", protect, async (req, res) => {
+    try {
+        const records = await FCACC.aggregate([
+            {
+                $lookup: {
+                    from: "workers",          // collection name in MongoDB
+                    localField: "worker_id",  // FCACC.worker_id
+                    foreignField: "id",       // Worker.id
+                    as: "worker_details"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$worker_details",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $sort: { date_of_medical_examination: -1 }
+            }
+        ]);
+
+        return res.status(200).json({ records });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: err.message });
+    }
+});
+
 router.post("/fitness-clearance", protect, async (req, res) => {
     try {
         let {
@@ -64,5 +93,56 @@ router.post("/fitness-clearance", protect, async (req, res) => {
         return res.status(500).json({ message: err.message });
     }
 })
+
+// UPDATE FCACC
+router.put("/fitness-clearance/:id", protect, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            competency_assessment_by,
+            general_examination,
+            pulse,
+            systolic,
+            diastolic,
+            spo2,
+            height,
+            weight,
+            vertigo_test_passed,
+            date_of_issuance_of_certificate_for_competency_clearance
+        } = req.body;
+
+        const updated = await FCACC.findByIdAndUpdate(
+            id,
+            {
+                competency_assessment_by,
+                date_of_issuance_of_certificate_for_competency_clearance,
+                examination_findings: {
+                    general_examination,
+                    pulse,
+                    blood_pressure: {
+                        systolic,
+                        diastolic
+                    },
+                    spo2,
+                    height,
+                    weight,
+                    vertigo_test_passed
+                }
+            },
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ message: "Record not found" });
+        }
+
+        res.json({ message: "FCACC updated", updated });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
 
 export default router;
