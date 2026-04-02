@@ -24,7 +24,7 @@ const FCACCSchema = new mongoose.Schema({
         },
         height: { type: Number },
         weight: { type: Number },
-        vertigo_test_passed: { type: Boolean, default: true }
+        vertigo_test_passed: { type: String, enum: ["Passed", "Failed", "Not Done"]}
     }
 });
 
