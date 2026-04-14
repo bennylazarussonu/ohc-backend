@@ -16,11 +16,36 @@ const IdRenewalSchema = new mongoose.Schema({
         systolic: {type: Number},
         diastolic: {type: Number}
     },
+    opthalmic_examination: {
+        far_vision: {
+            without_glasses: {
+                left: { type: String },
+                right: { type: String }
+            },
+            with_glasses: {
+                left: { type: String },
+                right: { type: String }
+            }
+        },
+        near_vision: {
+            without_glasses: {
+                left: { type: Number },
+                right: { type: Number }
+            },
+            with_glasses: {
+                left: { type: Number },
+                right: { type: Number }
+            }
+        },
+        with_glasses_diagnosis: { type: String },
+        without_glasses_diagnosis: { type: String },
+        color_perception: { type: String }
+    },
     spo2: {type: Number},
     height: {type: Number},
     weight: {type: Number},
     remarks: {type: String},
-    vertigo_test_passed: {type: Boolean, default: true}
+    vertigo_test_passed: {type: String, enum: ["Passed", "Failed", "Not Done"]}
 });
 
 IdRenewalSchema.pre("save", async function() {

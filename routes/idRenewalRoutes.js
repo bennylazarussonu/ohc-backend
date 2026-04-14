@@ -37,6 +37,7 @@ router.post("/renew", protect, async (req, res) => {
             remarks,
             vertigo_test_passed,
             worker_data,
+            opthalmic_examination
         } = req.body;
 
         if (!worker_id && !worker_data) {
@@ -110,6 +111,7 @@ router.post("/renew", protect, async (req, res) => {
                         systolic,
                         diastolic,
                     },
+                    opthalmic_examination,
                     spo2,
                     height,
                     weight,
@@ -168,6 +170,7 @@ router.post("/renew", protect, async (req, res) => {
 //             remarks,
 //             vertigo_test_passed,
 //             worker_data,
+//             opthalmic_examination
 //         } = req.body;
 
 //         if (!worker_id && !worker_data) {
@@ -225,6 +228,7 @@ router.post("/renew", protect, async (req, res) => {
 //                 systolic,
 //                 diastolic,
 //             },
+//             opthalmic_examination,
 //             spo2,
 //             height,
 //             weight,
