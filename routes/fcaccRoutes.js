@@ -47,6 +47,7 @@ router.post("/fitness-clearance", protect, async (req, res) => {
             spo2,
             height,
             weight,
+            opthalmic_examination,
             vertigo_test_passed,
             worker_data
         } = req.body;
@@ -83,6 +84,7 @@ router.post("/fitness-clearance", protect, async (req, res) => {
                     spo2,
                     height,
                     weight,
+                    opthalmic_examination,
                     vertigo_test_passed
                 }
             });
