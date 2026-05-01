@@ -12,17 +12,16 @@ router.post("/login", async (req, res) => {
   const user = await User.findOne({ userId, active: true });
 
   if (!user) {
-
-    return res.status(401).json({ message: "Invalid User" });
+    return res.status(401).json({ message: "User Not Found" });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) {
-    return res.status(401).json({ message: "Invalid Password" });
+    return res.status(401).json({ message: "Incorrect Password" });
   }
 
   const token = jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role, userId: user.userId },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );
@@ -30,6 +29,7 @@ router.post("/login", async (req, res) => {
   res.json({
     token,
     user: {
+      id: user._id,
       userId: user.userId,
       role: user.role
     }
