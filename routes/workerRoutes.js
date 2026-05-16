@@ -3,6 +3,8 @@ import multer from "multer";
 import xlsx from "xlsx";
 import Worker from "../models/Worker.js";
 import PreEmployment from "../models/PreEmployment.js";
+import OPD from "../models/OPD.js";
+import Prescription from "../models/Prescriptions.js";
 import Counter from "../models/Counter.js";
 import { protect, allowRoles } from "../middlewares/auth.js";
 
@@ -324,6 +326,34 @@ router.get("/:id", protect, async (req, res) => {
     }
 
     res.json(worker);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+//fetch opds for a worker
+router.get("/:id/opds", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+  try {
+    const opds = await OPD.find({
+      worker_id: Number(req.params.id)
+    }).sort({ created_at: -1 });
+
+    const opdIds = opds.map(opd => opd.id);
+
+    const prescriptions = await Prescription.find({
+      opd_id: { $in: opdIds }
+    });
+
+    // Attach prescriptions to each OPD
+    const opdsWithPrescriptions = opds.map(opd => ({
+      ...opd.toObject(),
+      prescriptions: prescriptions.filter(
+        p => p.opd_id === opd.id
+      )
+    }));
+
+    res.json(opdsWithPrescriptions);
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
