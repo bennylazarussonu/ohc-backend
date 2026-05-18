@@ -248,5 +248,26 @@ router.post("/renew", protect, async (req, res) => {
 //     }
 // });
 
+router.get("/latest/:worker_id", protect, async (req, res) => {
+    try {
+        const latest = await IdRenewal.findOne({
+            worker_id: Number(req.params.worker_id)
+        }).sort({ date_of_renewal: -1 });
+
+        if (!latest) {
+            return res.status(404).json({
+                message: "No previous renewal found"
+            });
+        }
+
+        res.json(latest);
+
+    } catch (err) {
+        res.status(500).json({
+            message: err.message
+        });
+    }
+});
+
 
 export default router;
