@@ -29,15 +29,13 @@ async function consumeStock(medicine_id, quantity) {
 }
 
 async function getAvailableStock(medicine_id) {
-  const result = await Stock.aggregate([
-    { $match: { medicine_id } },
-    { $group: { _id: null, total: { $sum: "$units" } } }
-  ]);
+    const result = await Stock.aggregate([
+        { $match: { medicine_id } },
+        { $group: { _id: null, total: { $sum: "$units" } } },
+    ]);
 
-  return result[0]?.total || 0;
+    return result[0]?.total || 0;
 }
-
-
 
 router.get("/", async (req, res) => {
     try {
@@ -93,9 +91,9 @@ router.get("/:zoneId/items", async (req, res) => {
         },
         {
             $addFields: {
-  available_stock: { $sum: "$stock.units" },
-  expiry_date: { $min: "$stock.expiry_date" }
-},
+                available_stock: { $sum: "$stock.units" },
+                expiry_date: { $min: "$stock.expiry_date" },
+            },
         },
     ]);
 
@@ -104,30 +102,34 @@ router.get("/:zoneId/items", async (req, res) => {
 
 router.post("/:zoneId/add-item", async (req, res) => {
     const zoneId = Number(req.params.zoneId);
+
     const medicine_id = Number(req.body.medicine_id);
+
     const quantity = Math.max(0, Number(req.body.quantity));
 
-    if (quantity <= 0)
-        return res.status(400).json({ message: "Invalid quantity" });
+    const medicine = await Medicines.findOne({
+        id: medicine_id,
+    });
 
-    const medicine = await Medicines.findOne({ id: medicine_id });
-
-    if (!medicine)
-        return res.status(404).json({ message: "Medicine not found" });
+    if (!medicine) {
+        return res.status(404).json({
+            message: "Medicine not found",
+        });
+    }
 
     const available = await getAvailableStock(medicine_id);
 
-if (available < quantity) {
-  return res.status(400).json({
-    message: `Insufficient stock. Available: ${available}`
-  });
-}
+    if (quantity > available) {
+        return res.status(400).json({
+            message: `Insufficient stock. Available: ${available}`,
+        });
+    }
 
-    // total stock available
-    const allocated = await consumeStock(medicine_id, quantity);
+    let allocated = 0;
 
-    if (allocated === 0)
-        return res.status(400).json({ message: "No stock available" });
+    if (quantity > 0) {
+        allocated = await consumeStock(medicine_id, quantity);
+    }
 
     const existing = await ZoneItem.findOne({
         zone_id: zoneId,
@@ -135,18 +137,25 @@ if (available < quantity) {
     });
 
     if (existing) {
-        existing.quantity += allocated;
+        existing.quantity += quantity;
         existing.last_replaced = new Date();
+
         await existing.save();
+
         return res.json(existing);
     }
 
     const item = new ZoneItem({
         zone_id: zoneId,
+
         medicine_id,
+
         item_name: medicine.drug_name_and_dose,
+
         category: medicine.category,
-        quantity: allocated,
+
+        quantity,
+
         last_replaced: new Date(),
     });
 
@@ -156,217 +165,250 @@ if (available < quantity) {
 });
 
 // routes/medicines.js
-router.get("/search-stock", async (req,res)=>{
-  const query = req.query.query || "";
+router.get("/search-stock", async (req, res) => {
+    const query = req.query.query || "";
 
-  const medicines = await Stock.aggregate([
-    {
-      $match:{
-        units:{$gt:0}
-      }
-    },
+    const medicines = await Stock.aggregate([
+        {
+            $match: {
+                units: { $gt: 0 },
+            },
+        },
 
-    {
-      $group:{
-        _id:"$medicine_id",
-        stock:{$sum:"$units"}
-      }
-    },
+        {
+            $group: {
+                _id: "$medicine_id",
+                stock: { $sum: "$units" },
+            },
+        },
 
-    {
-      $lookup:{
-        from:"medicines",
-        localField:"_id",
-        foreignField:"id",
-        as:"medicine"
-      }
-    },
+        {
+            $lookup: {
+                from: "medicines",
+                localField: "_id",
+                foreignField: "id",
+                as: "medicine",
+            },
+        },
 
-    { $unwind:"$medicine" },
+        { $unwind: "$medicine" },
 
-    {
-      $match:{
-        "medicine.drug_name_and_dose":{
-          $regex:query,
-          $options:"i"
-        }
-      }
-    },
+        {
+            $match: {
+                "medicine.drug_name_and_dose": {
+                    $regex: query,
+                    $options: "i",
+                },
+            },
+        },
 
-    {
-      $project:{
-        id:"$medicine.id",
-        drug_name_and_dose:"$medicine.drug_name_and_dose",
-        category:"$medicine.category",
-        stock:1
-      }
-    },
+        {
+            $project: {
+                id: "$medicine.id",
+                drug_name_and_dose: "$medicine.drug_name_and_dose",
+                category: "$medicine.category",
+                stock: 1,
+            },
+        },
 
-    { $sort:{drug_name_and_dose:1} },
-    { $limit:10 }
+        { $sort: { drug_name_and_dose: 1 } },
+        { $limit: 10 },
+    ]);
 
-  ]);
-
-  res.json(medicines);
-
+    res.json(medicines);
 });
 
-router.post("/:zoneId/replace", async (req,res)=>{
+router.post("/:zoneId/replace", async (req, res) => {
+    const zoneId = Number(req.params.zoneId);
+    const { updates } = req.body;
 
-  const zoneId = Number(req.params.zoneId);
-  const {updates} = req.body;
+    if (!updates || !Array.isArray(updates)) {
+        return res.status(400).json({ message: "Invalid request" });
+    }
 
-  if (!updates || !Array.isArray(updates)) {
-    return res.status(400).json({ message: "Invalid request" });
-  }
+    for (const item of updates) {
+        const medicine_id = Number(item.medicine_id);
+        const qty = Math.max(0, Number(item.replace_qty));
 
-  for(const item of updates){
+        if (qty <= 0) continue;
 
-    const medicine_id = Number(item.medicine_id);
-    const qty = Math.max(0, Number(item.replace_qty));
+        const zoneItem = await ZoneItem.findOne({
+            zone_id: zoneId,
+            medicine_id,
+        });
 
-    if(qty <= 0) continue;
+        if (!zoneItem) continue;
 
-    const zoneItem = await ZoneItem.findOne({
-      zone_id: zoneId,
-      medicine_id
-    });
+        // STEP 1 — remove from box (consumed)
+        const consumed = Math.min(qty, zoneItem.quantity);
 
-    if(!zoneItem) continue;
+        zoneItem.quantity -= consumed;
 
-    // STEP 1 — remove from box (consumed)
-    const consumed = Math.min(qty, zoneItem.quantity);
+        await ZoneConsumption.create({
+            zone_id: zoneId,
+            medicine_id,
+            quantity: consumed,
+            reason: "REPLACED",
+        });
 
-    zoneItem.quantity -= consumed;
+        // STEP 2 — take from central stock
+        const allocated = await consumeStock(medicine_id, consumed);
 
-    await ZoneConsumption.create({
-      zone_id: zoneId,
-      medicine_id,
-      quantity: consumed,
-      reason: "REPLACED"
-    });
+        // STEP 3 — add replacement
+        zoneItem.quantity += allocated;
+        zoneItem.last_replaced = new Date();
 
-    // STEP 2 — take from central stock
-    const allocated = await consumeStock(medicine_id, consumed);
+        await zoneItem.save();
+    }
 
-    // STEP 3 — add replacement
-    zoneItem.quantity += allocated;
-    zoneItem.last_replaced = new Date();
-
-    await zoneItem.save();
-  }
-
-  res.json({message:"Zone updated"});
+    res.json({ message: "Zone updated" });
 });
 
-router.post("/:zoneId/consume", async (req,res)=>{
+router.post("/:zoneId/consume", async (req, res) => {
+    const zoneId = Number(req.params.zoneId);
+    const { updates } = req.body;
 
-  const zoneId = Number(req.params.zoneId);
-  const {updates} = req.body;
+    for (const item of updates) {
+        const medicine_id = Number(item.medicine_id);
+        const qty = Math.max(0, Number(item.consumed_qty));
 
-  for(const item of updates){
+        if (qty <= 0) continue;
 
-    const medicine_id = Number(item.medicine_id);
-    const qty = Math.max(0, Number(item.consumed_qty));
+        const zoneItem = await ZoneItem.findOne({
+            zone_id: zoneId,
+            medicine_id,
+        });
 
-    if(qty <= 0) continue;
+        if (!zoneItem) continue;
 
-    const zoneItem = await ZoneItem.findOne({
-      zone_id: zoneId,
-      medicine_id
-    });
+        const consumed = Math.min(qty, zoneItem.quantity);
 
-    if(!zoneItem) continue;
+        zoneItem.quantity -= consumed;
 
-    const consumed = Math.min(qty, zoneItem.quantity);
+        await ZoneConsumption.create({
+            zone_id: zoneId,
+            medicine_id,
+            quantity: consumed,
+            reason: "USED",
+            timestamp: new Date(),
+            user: req.user?.id || "system",
+        });
 
-    zoneItem.quantity -= consumed;
+        await zoneItem.save();
+    }
 
-    await ZoneConsumption.create({
-  zone_id: zoneId,
-  medicine_id,
-  quantity: consumed,
-  reason: "USED",
-  timestamp: new Date(),
-  user: req.user?.id || "system"
+    res.json({ message: "Consumption recorded" });
 });
 
-    await zoneItem.save();
+router.post("/:zoneId/add", async (req, res) => {
+    const zoneId = Number(req.params.zoneId);
+    const { updates } = req.body;
 
-  }
+    for (const item of updates) {
+        const medicine_id = Number(item.medicine_id);
+        const qty = Math.max(0, Number(item.add_qty));
 
-  res.json({message:"Consumption recorded"});
+        if (qty <= 0) continue;
+
+        const allocated = await consumeStock(medicine_id, qty);
+
+        const zoneItem = await ZoneItem.findOne({
+            zone_id: zoneId,
+            medicine_id,
+        });
+
+        if (!zoneItem) continue;
+
+        zoneItem.quantity += allocated;
+        zoneItem.last_replaced = new Date();
+
+        await zoneItem.save();
+    }
+
+    res.json({ message: "Stock added to zone" });
 });
 
-router.post("/:zoneId/add", async (req,res)=>{
+router.get("/:zoneId/consumption", async (req, res) => {
+    const zoneId = Number(req.params.zoneId);
 
-  const zoneId = Number(req.params.zoneId);
-  const {updates} = req.body;
+    const logs = await ZoneConsumption.aggregate([
+        {
+            $match: { zone_id: zoneId },
+        },
 
-  for(const item of updates){
+        {
+            $lookup: {
+                from: "medicines",
+                localField: "medicine_id",
+                foreignField: "id",
+                as: "medicine",
+            },
+        },
 
-    const medicine_id = Number(item.medicine_id);
-    const qty = Math.max(0, Number(item.add_qty));
+        { $unwind: "$medicine" },
 
-    if(qty <= 0) continue;
+        {
+            $project: {
+                _id: 0,
+                medicine_id: 1,
+                item_name: "$medicine.drug_name_and_dose",
+                quantity: 1,
+                reason: 1,
+                date: 1,
+            },
+        },
 
-    const allocated = await consumeStock(medicine_id, qty);
+        { $sort: { date: -1 } },
+    ]);
 
-    const zoneItem = await ZoneItem.findOne({
-      zone_id: zoneId,
-      medicine_id
-    });
-
-    if(!zoneItem) continue;
-
-    zoneItem.quantity += allocated;
-    zoneItem.last_replaced = new Date();
-
-    await zoneItem.save();
-
-  }
-
-  res.json({message:"Stock added to zone"});
+    res.json(logs);
 });
 
-router.get("/:zoneId/consumption", async (req,res)=>{
+router.get("/search-medicines", async (req, res) => {
+    const query = req.query.query || "";
 
-  const zoneId = Number(req.params.zoneId);
+    const medicines = await Medicines.find({
+        drug_name_and_dose: {
+            $regex: query,
+            $options: "i",
+        },
+    })
+        .sort({ drug_name_and_dose: 1 })
+        .limit(10);
 
-  const logs = await ZoneConsumptions.aggregate([
+    const results = await Promise.all(
+        medicines.map(async (medicine) => {
+            const stockData = await Stock.aggregate([
+                {
+                    $match: {
+                        medicine_id: medicine.id,
+                    },
+                },
 
-    {
-      $match:{ zone_id: zoneId }
-    },
+                {
+                    $group: {
+                        _id: null,
+                        stock: { $sum: "$units" },
+                        expiry_date: { $min: "$expiry_date" },
+                    },
+                },
+            ]);
 
-    {
-      $lookup:{
-        from:"medicines",
-        localField:"medicine_id",
-        foreignField:"id",
-        as:"medicine"
-      }
-    },
+            return {
+                id: medicine.id,
 
-    { $unwind:"$medicine" },
+                drug_name_and_dose: medicine.drug_name_and_dose,
 
-    {
-      $project:{
-        _id:0,
-        medicine_id:1,
-        item_name:"$medicine.drug_name_and_dose",
-        quantity:1,
-        reason:1,
-        date:1
-      }
-    },
+                category: medicine.category,
 
-    { $sort:{ date:-1 } }
+                stock: stockData[0]?.stock || 0,
 
-  ]);
+                expiry_date: stockData[0]?.expiry_date || null,
+            };
+        }),
+    );
 
-  res.json(logs);
-
+    res.json(results);
 });
 
 export default router;

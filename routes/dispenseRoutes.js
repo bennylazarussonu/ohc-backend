@@ -280,27 +280,37 @@ router.post("/fill-prescription", protect, async (req, res) => {
       if (!item.stock_ids || !item.stock_ids.length) continue;
 
       const stockId = item.stock_ids[0]; // FIFO
-      const unitsToDispense = Number(item.units);
+      if (!Number.isInteger(unitsToDispense)) {
+  throw new Error("Units must be integer");
+}
+const unitsToDispense = Number(item.units);
 
       if (!unitsToDispense || unitsToDispense <= 0) {
         throw new Error("Invalid dispense quantity");
       }
 
       // 🔍 Fetch stock
-      const stock = await Stock.findOne({ id: stockId });
-      if (!stock) {
-        throw new Error(`Stock not found (ID: ${stockId})`);
-      }
+      const updatedStock = await Stock.findOneAndUpdate(
+  {
+    id: stockId,
+    units: { $gte: unitsToDispense },
+    expiry_date: { $gte: new Date() }
+  },
+  {
+    $inc: {
+      units: -unitsToDispense
+    }
+  },
+  {
+    new: true
+  }
+);
 
-      if (stock.units < unitsToDispense) {
-        throw new Error(
-          `Insufficient stock for ${stock.item_name}. Available: ${stock.units}`
-        );
-      }
-
-      // ➖ Deduct units
-      stock.units -= unitsToDispense;
-      await stock.save();
+if (!updatedStock) {
+  throw new Error(
+    `Insufficient stock or stock not found`
+  );
+}
 
       finalItems.push({
         stock_id: stockId,
@@ -324,10 +334,12 @@ router.post("/fill-prescription", protect, async (req, res) => {
     });
 
     // ✅ Mark OPD as dispensed
-    await OPD.findOneAndUpdate(
-      { id: opd_id },
-      { medicine_dispensed: true }
-    );
+    if (opd_id) {
+  await OPD.findOneAndUpdate(
+    { id: opd_id },
+    { medicine_dispensed: true }
+  );
+}
 
     res.status(201).json({
       success: true,
@@ -343,6 +355,58 @@ router.post("/fill-prescription", protect, async (req, res) => {
       message: err.message
     });
   }
+});
+
+router.get("/workers/search", protect, async (req, res) => {
+    try {
+        const q = req.query.q || "";
+
+        const workers = await Worker.find({
+            $or: [
+                { name: { $regex: q, $options: "i" } },
+                { employee_id: { $regex: q, $options: "i" } },
+                { fathers_name: { $regex: q, $options: "i" } }
+            ]
+        }).limit(20);
+
+        res.json({
+            success: true,
+            data: workers
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+});
+
+router.get("/stock/search", protect, async (req, res) => {
+    try {
+        const q = req.query.q || "";
+
+        const stocks = await Stock.find({
+            units: { $gt: 0 },
+            $or: [
+                { item_name: { $regex: q, $options: "i" } },
+                { brand: { $regex: q, $options: "i" } }
+            ]
+        })
+        .sort({ expiry_date: 1 })
+        .limit(30);
+
+        res.json({
+            success: true,
+            data: stocks
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
 });
 
 

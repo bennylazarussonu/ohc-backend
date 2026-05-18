@@ -6,7 +6,9 @@ const zoneItemSchema = new mongoose.Schema({
   medicine_id: { type: Number },
 
   item_name: {type: String},
+  brand: {type: String},
   category: {type: String},
+  default_quantity: { type: Number },
 
   quantity: { type: Number, default: 0 },
 
