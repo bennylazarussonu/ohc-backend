@@ -326,5 +326,16 @@ router.put("/revoke", protect, async(req, res) => {
     }
 })
 
+router.get("/all", protect, async(req, res) => {
+  try{
+    const list = await PreEmployment.find({});
+
+    res.json(list);
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 export default router;
 
