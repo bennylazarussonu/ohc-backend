@@ -164,6 +164,45 @@ router.put("/edit-by-id/:medicineId", protect, allowRoles("ADMIN"), async (req, 
   }
 });
 
+router.get("/fab-search", async (req, res) => {
+
+    try {
+
+        const q =
+            req.query.q?.trim();
+
+        if (!q) {
+
+            return res.json([]);
+        }
+
+        const medicines =
+            await Medicines.find({
+
+                drug_name_and_dose: {
+
+                    $regex: q,
+
+                    $options: "i"
+                }
+
+            })
+
+            .limit(20);
+
+        res.json(medicines);
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            message:
+                "Search failed"
+        });
+    }
+});
+
 router.get("/search", protect, async (req, res) => {
   try {
     const { query } = req.query;
