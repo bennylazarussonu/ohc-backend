@@ -22,6 +22,8 @@ import Notifications from './models/Notifications.js';
 import fcaccRoutes from './routes/fcaccRoutes.js';
 import malariaRoutes from './routes/malariaRoutes.js';
 import zoneRoutes from "./routes/zoneRoutes.js";
+import startExpiryCron from './jobs/expireMedicine.js';
+import medicineExpiryRoutes from './routes/medicineExpiryRoutes.js';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -49,8 +51,9 @@ app.use("/api/notifications", notificationsRoute);
 app.use("/api/fcacc", fcaccRoutes);
 app.use("/api/malaria", malariaRoutes);
 app.use("/api/fab/zones", zoneRoutes);
+app.use("/api/medicine-expiry", medicineExpiryRoutes);
 
-startWorkerExpiryJob();
+
 
 app.get("/", (request, response) => {
     try{
@@ -62,6 +65,8 @@ app.get("/", (request, response) => {
 
 mongoose.connect(process.env.MONGODB_URI).then(() => {
     console.log("Connected to MongoDB");
+    startWorkerExpiryJob();
+startExpiryCron();
     // setInterval(async () => {
     //     try {
     //         const result = await Notifications.updateMany(

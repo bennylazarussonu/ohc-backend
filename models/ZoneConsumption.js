@@ -6,7 +6,7 @@ import Counter from "./Counter.js";
 const zoneConsumptionSchema = new mongoose.Schema({
 id: {type: Number, unique: true},
   zone_id: {type: Number},
-  medicine_id: {Number},
+  medicine_id: {type: Number},
 
   quantity: {type: Number},
 

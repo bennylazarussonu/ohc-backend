@@ -10,7 +10,11 @@ const stockSchema = new mongoose.Schema({
     per_unit_cost: { type: Number },
     expiry_date: { type: Date },
     procurement_date: { type: Date },
-    medicine_id: { type: Number }
+    medicine_id: { type: Number },
+    is_expired: {
+    type: Boolean,
+    default: false
+}
 });
 
 stockSchema.pre("save", async function () {
@@ -23,6 +27,19 @@ stockSchema.pre("save", async function () {
     )
 
     this.id = counter.seq;
+});
+
+stockSchema.index({
+    expiry_date: 1
+});
+
+stockSchema.index({
+    medicine_id: 1,
+    expiry_date: 1
+});
+
+stockSchema.index({
+    is_expired: 1
 });
 
 export default mongoose.model("Stock", stockSchema);

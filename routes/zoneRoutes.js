@@ -12,7 +12,12 @@ const router = express.Router();
 async function consumeStock(medicine_id, quantity) {
     let needed = quantity;
 
-    const batches = await Stock.find({ medicine_id }).sort({ expiry_date: 1 });
+    const batches = await Stock.find({
+    medicine_id,
+    units: { $gt: 0 },
+    is_expired: false,
+    expiry_date: { $gte: new Date() }
+}).sort({ expiry_date: 1 });
 
     for (const batch of batches) {
         if (needed <= 0) break;
@@ -20,6 +25,9 @@ async function consumeStock(medicine_id, quantity) {
         const take = Math.min(batch.units, needed);
 
         batch.units -= take;
+        if (batch.units <= 0) {
+    batch.units = 0;
+}
         needed -= take;
 
         await batch.save();
@@ -30,7 +38,16 @@ async function consumeStock(medicine_id, quantity) {
 
 async function getAvailableStock(medicine_id) {
     const result = await Stock.aggregate([
-        { $match: { medicine_id } },
+        {
+    $match: {
+        medicine_id,
+        units: { $gt: 0 },
+        is_expired: false,
+        expiry_date: {
+            $gte: new Date()
+        }
+    }
+},
         { $group: { _id: null, total: { $sum: "$units" } } },
     ]);
 
@@ -82,17 +99,36 @@ router.get("/:zoneId/items", async (req, res) => {
     const items = await ZoneItem.aggregate([
         { $match: { zone_id: zoneId } },
         {
-            $lookup: {
-                from: "stocks",
-                localField: "medicine_id",
-                foreignField: "medicine_id",
-                as: "stock",
-            },
-        },
+    $lookup: {
+        from: "stocks",
+        let: { medId: "$medicine_id" },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $eq: [
+                            "$medicine_id",
+                            "$$medId"
+                        ]
+                    },
+
+                    units: { $gt: 0 },
+
+                    is_expired: false,
+
+                    expiry_date: {
+                        $gte: new Date()
+                    }
+                }
+            }
+        ],
+        as: "stock"
+    }
+},
         {
             $addFields: {
                 available_stock: { $sum: "$stock.units" },
-                expiry_date: { $min: "$stock.expiry_date" },
+                // expiry_date: { $min: "$stock.expiry_date" },
             },
         },
     ]);
@@ -125,6 +161,19 @@ router.post("/:zoneId/add-item", async (req, res) => {
         });
     }
 
+    const stockBatch = await Stock.findOne({
+    medicine_id,
+    units: { $gt: 0 },
+    is_expired: false,
+    expiry_date: { $gte: new Date() }
+}).sort({ expiry_date: 1 });
+
+if (!stockBatch) {
+    return res.status(400).json({
+        message: "No valid stock batch found"
+    });
+}
+
     let allocated = 0;
 
     if (quantity > 0) {
@@ -136,28 +185,44 @@ router.post("/:zoneId/add-item", async (req, res) => {
         medicine_id,
     });
 
-    if (existing) {
-        existing.quantity += quantity;
-        existing.last_replaced = new Date();
+if (existing) {
 
-        await existing.save();
+    existing.quantity += allocated;
 
-        return res.json(existing);
-    }
+    existing.expiry_date =
+        stockBatch?.expiry_date ||
+        existing.expiry_date;
 
-    const item = new ZoneItem({
-        zone_id: zoneId,
+    existing.brand =
+        stockBatch?.brand ||
+        existing.brand;
 
-        medicine_id,
+    existing.is_expired = false;
 
-        item_name: medicine.drug_name_and_dose,
+    existing.last_replaced = new Date();
 
-        category: medicine.category,
+    await existing.save();
 
-        quantity,
+    return res.json(existing);
+}
 
-        last_replaced: new Date(),
-    });
+const item = new ZoneItem({
+    zone_id: zoneId,
+
+    medicine_id,
+
+    item_name: medicine.drug_name_and_dose,
+
+    brand: stockBatch?.brand || "",
+
+    category: medicine.category,
+
+    quantity: allocated,
+
+    expiry_date: stockBatch?.expiry_date || null,
+
+    last_replaced: new Date(),
+});
 
     await item.save();
 
@@ -172,6 +237,8 @@ router.get("/search-stock", async (req, res) => {
         {
             $match: {
                 units: { $gt: 0 },
+is_expired: false,
+expiry_date: { $gte: new Date() }
             },
         },
 
@@ -251,12 +318,37 @@ router.post("/:zoneId/replace", async (req, res) => {
             reason: "REPLACED",
         });
 
+        const stockBatch = await Stock.findOne({
+    medicine_id,
+    units: { $gt: 0 },
+    is_expired: false,
+    expiry_date: { $gte: new Date() }
+}).sort({ expiry_date: 1 });
+
+if (!stockBatch) {
+    return res.status(400).json({
+        message: "No valid stock batch found"
+    });
+}
+
         // STEP 2 — take from central stock
         const allocated = await consumeStock(medicine_id, consumed);
 
         // STEP 3 — add replacement
-        zoneItem.quantity += allocated;
+        zoneItem.quantity = Math.max(
+    0,
+    zoneItem.quantity + allocated
+);
         zoneItem.last_replaced = new Date();
+        zoneItem.expiry_date =
+    stockBatch?.expiry_date ||
+    zoneItem.expiry_date;
+
+zoneItem.brand =
+    stockBatch?.brand ||
+    zoneItem.brand;
+
+zoneItem.is_expired = false;
 
         await zoneItem.save();
     }
@@ -310,6 +402,19 @@ router.post("/:zoneId/add", async (req, res) => {
 
         if (qty <= 0) continue;
 
+        const stockBatch = await Stock.findOne({
+    medicine_id,
+    units: { $gt: 0 },
+    is_expired: false,
+    expiry_date: { $gte: new Date() }
+}).sort({ expiry_date: 1 });
+
+if (!stockBatch) {
+    return res.status(400).json({
+        message: "No valid stock batch found"
+    });
+}
+
         const allocated = await consumeStock(medicine_id, qty);
 
         const zoneItem = await ZoneItem.findOne({
@@ -319,8 +424,20 @@ router.post("/:zoneId/add", async (req, res) => {
 
         if (!zoneItem) continue;
 
-        zoneItem.quantity += allocated;
-        zoneItem.last_replaced = new Date();
+
+zoneItem.quantity += allocated;
+
+zoneItem.expiry_date =
+    stockBatch?.expiry_date ||
+    zoneItem.expiry_date;
+
+zoneItem.brand =
+    stockBatch?.brand ||
+    zoneItem.brand;
+
+zoneItem.is_expired = false;
+
+zoneItem.last_replaced = new Date();
 
         await zoneItem.save();
     }
@@ -381,8 +498,13 @@ router.get("/search-medicines", async (req, res) => {
             const stockData = await Stock.aggregate([
                 {
                     $match: {
-                        medicine_id: medicine.id,
-                    },
+    medicine_id: medicine.id,
+    units: { $gt: 0 },
+    is_expired: false,
+    expiry_date: {
+        $gte: new Date()
+    }
+}
                 },
 
                 {

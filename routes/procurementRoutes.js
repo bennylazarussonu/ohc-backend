@@ -82,6 +82,7 @@ router.post("/add", async (req, res) => {
                 procurement_date,
                 expiry_date: item.expiry_date,
                 medicine_id: item.medicine_id,
+                is_expired: false
             });
 
             await stock.save(); // Counter runs ✔
