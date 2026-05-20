@@ -16,6 +16,7 @@ router.post("/add", protect, async (req, res) => {
     }
 });
 
+// FOR PRODUCTION - Uncomment the below route when deploying or for production
 router.post("/renew", protect, async (req, res) => {
     console.log("Hey");
     let session;
@@ -37,7 +38,8 @@ router.post("/renew", protect, async (req, res) => {
             remarks,
             vertigo_test_passed,
             worker_data,
-            opthalmic_examination
+            opthalmic_examination,
+            test_done_by
         } = req.body;
 
         if (!worker_id && !worker_data) {
@@ -118,6 +120,7 @@ router.post("/renew", protect, async (req, res) => {
                     remarks,
                     vertigo_test_passed,
                     date_of_renewal: new Date(),
+                    test_done_by
                 },
             ],
             { session }
@@ -154,6 +157,7 @@ router.post("/renew", protect, async (req, res) => {
     }
 });
 
+// FOR LOCAL - Uncomment the below route when running locally
 // router.post("/renew", protect, async (req, res) => {
 //     try {
 //         let {
@@ -170,8 +174,10 @@ router.post("/renew", protect, async (req, res) => {
 //             remarks,
 //             vertigo_test_passed,
 //             worker_data,
-//             opthalmic_examination
+//             opthalmic_examination,
+//             test_done_by
 //         } = req.body;
+//         console.log(test_done_by);
 
 //         if (!worker_id && !worker_data) {
 //             return res.status(400).json({
@@ -235,6 +241,7 @@ router.post("/renew", protect, async (req, res) => {
 //             remarks,
 //             vertigo_test_passed,
 //             date_of_renewal: new Date(),
+//             test_done_by
 //         });
 
 //         return res.status(201).json({

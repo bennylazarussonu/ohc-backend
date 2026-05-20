@@ -45,7 +45,12 @@ const IdRenewalSchema = new mongoose.Schema({
     height: {type: Number},
     weight: {type: Number},
     remarks: {type: String},
-    vertigo_test_passed: {type: String, enum: ["Passed", "Failed", "Not Done"]}
+    vertigo_test_passed: {type: String, enum: ["Passed", "Failed", "Not Done"]},
+    test_done_by: {
+        id: {type: String},
+        userId: {type: String},
+        role: {type: String}
+    }
 });
 
 IdRenewalSchema.pre("save", async function() {
