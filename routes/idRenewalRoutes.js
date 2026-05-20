@@ -269,5 +269,38 @@ router.get("/latest/:worker_id", protect, async (req, res) => {
     }
 });
 
+router.get("/list", protect, async (req, res) => {
+    try {
+        const renewals = await IdRenewal.find()
+            .sort({ date_of_renewal: -1 })
+            .lean();
+
+        const workerIds = renewals.map(r => r.worker_id);
+
+        const workers = await Worker.find({
+            id: { $in: workerIds }
+        }).lean();
+
+        const workerMap = {};
+
+        workers.forEach(worker => {
+            workerMap[worker.id] = worker;
+        });
+
+        const finalData = renewals.map(renewal => ({
+            ...renewal,
+            worker: workerMap[renewal.worker_id] || null
+        }));
+
+        res.json(finalData);
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            message: err.message
+        });
+    }
+});
+
 
 export default router;
