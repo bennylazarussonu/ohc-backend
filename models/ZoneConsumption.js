@@ -7,6 +7,11 @@ const zoneConsumptionSchema = new mongoose.Schema({
 id: {type: Number, unique: true},
   zone_id: {type: Number},
   medicine_id: {type: Number},
+  visit_id: {type: Number},
+  item_name: {type: String},
+  brand: {type: String},
+  expiry_date: {type: Date},
+  per_unit_cost: {type: Number},
 
   quantity: {type: Number},
 

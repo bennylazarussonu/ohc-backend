@@ -319,13 +319,21 @@ router.post("/:zoneId/consume", async (req, res) => {
         await batch.save();
 
         await ZoneConsumption.create({
+            visit_id,
+
             zone_id: zoneId,
 
             medicine_id: batch.medicine_id,
 
-            quantity: qty,
+            item_name: batch.item_name,
 
-            visit_id,
+            brand: batch.brand,
+
+            expiry_date: batch.expiry_date,
+
+            per_unit_cost: batch.per_unit_cost,
+
+            quantity: qty,
 
             reason: reason || "USED",
         });
@@ -478,6 +486,50 @@ router.get(
 
             res.status(500).json({
                 message: "Failed to fetch active visit",
+            });
+        }
+    },
+);
+
+router.get(
+    "/:zoneId/history",
+
+    async (req, res) => {
+        try {
+            const zoneId = Number(req.params.zoneId);
+
+            const visits = await ZoneVisit.find({
+                zone_id: zoneId,
+            }).sort({
+                visit_date: -1,
+            });
+
+            const history = [];
+
+            for (const visit of visits) {
+                const consumptions = await ZoneConsumption.find({
+                    visit_id: visit.id,
+                });
+
+                const allocations = await ZoneAllocation.find({
+                    visit_id: visit.id,
+                });
+
+                history.push({
+                    visit,
+
+                    consumptions,
+
+                    allocations,
+                });
+            }
+
+            res.json(history);
+        } catch (err) {
+            console.error(err);
+
+            res.status(500).json({
+                message: "Failed to fetch history",
             });
         }
     },

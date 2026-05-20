@@ -332,7 +332,7 @@ router.get("/:id", protect, async (req, res) => {
 });
 
 //fetch opds for a worker
-router.get("/:id/opds", protect, allowRoles("ADMIN", "DOCTOR"), async (req, res) => {
+router.get("/:id/opds", protect, allowRoles("ADMIN", "DOCTOR", "EMPLOYEE"), async (req, res) => {
   try {
     const opds = await OPD.find({
       worker_id: Number(req.params.id)
