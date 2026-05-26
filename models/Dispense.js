@@ -11,6 +11,11 @@ const dispenseSchema = new mongoose.Schema({
     opd_id: { type: Number },
     dispensed_items: [itemSchema],
     dispensed_to_worker_id: { type: Number },
+    adjustment: { type: Boolean, default: false },
+    adjustment_id: {
+    type: Number,
+    default: null
+},
     dispensed_by: {
         role: { type: String },
         userId: { type: String }
