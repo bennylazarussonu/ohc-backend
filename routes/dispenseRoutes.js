@@ -281,6 +281,84 @@ if (
   }
 });
 
+router.get("/history", protect, async (req, res) => {
+  try {
+    const data = await Dispense.aggregate([
+      {
+        $lookup: {
+          from: "workers",
+          localField: "dispensed_to_worker_id",
+          foreignField: "id",
+          as: "worker",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "stocks",
+          localField: "dispensed_items.stock_id",
+          foreignField: "id",
+          as: "stocks",
+        },
+      },
+
+      {
+  $addFields: {
+    stocks: {
+      $map: {
+        input: "$stocks",
+        as: "stock",
+        in: {
+          $mergeObjects: [
+            "$$stock",
+            {
+              dispensed_units: {
+                $sum: {
+                  $map: {
+                    input: {
+                      $filter: {
+                        input: "$dispensed_items",
+                        as: "item",
+                        cond: {
+                          $eq: [
+                            "$$item.stock_id",
+                            "$$stock.id"
+                          ]
+                        }
+                      }
+                    },
+                    as: "matched",
+                    in: "$$matched.units"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+},
+
+      {
+        $sort: {
+          dispensed_on: -1,
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
 //local
 // router.post("/fill-prescription", protect, async (req, res) => {
 //     try {
