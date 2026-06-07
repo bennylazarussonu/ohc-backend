@@ -360,4 +360,39 @@ router.get("/list", protect, async (req, res) => {
     }
 });
 
+router.put("/:id", protect, async (req, res) => {
+    try {
+        const { systolic, diastolic, ...rest } = req.body;
+
+        const updated = await IdRenewal.findOneAndUpdate(
+            { id: Number(req.params.id) },
+            {
+                ...rest,
+                blood_pressure: {
+                    systolic,
+                    diastolic,
+                },
+            },
+            {
+                new: true,
+                runValidators: true,
+            },
+        );
+
+        if (!updated) {
+            return res.status(404).json({
+                message: "Renewal record not found",
+            });
+        }
+
+        res.json(updated);
+    } catch (err) {
+        console.error(err);
+
+        res.status(500).json({
+            message: err.message,
+        });
+    }
+});
+
 export default router;
