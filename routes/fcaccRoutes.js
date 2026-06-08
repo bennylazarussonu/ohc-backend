@@ -111,7 +111,8 @@ router.put("/fitness-clearance/:id", protect, async (req, res) => {
             height,
             weight,
             vertigo_test_passed,
-            date_of_issuance_of_certificate_for_competency_clearance
+            date_of_issuance_of_certificate_for_competency_clearance,
+            opthalmic_examination
         } = req.body;
 
         const updated = await FCACC.findByIdAndUpdate(
@@ -129,6 +130,7 @@ router.put("/fitness-clearance/:id", protect, async (req, res) => {
                     spo2,
                     height,
                     weight,
+                    opthalmic_examination,
                     vertigo_test_passed
                 }
             },
