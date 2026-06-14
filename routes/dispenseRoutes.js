@@ -6,6 +6,8 @@ import Stock from "../models/Stock.js";
 import Dispense from "../models/Dispense.js";
 import mongoose from "mongoose";
 import Worker from "../models/Worker.js";
+import Medicines from "../models/Medicines.js";
+import Procurement from "../models/Procurement.js";
 
 const router = express.Router();
 
@@ -166,197 +168,191 @@ router.get("/preview/:opdId", protect, async (req, res) => {
 
 //production
 router.post("/fill-prescription", protect, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-  try {
-    const {
-      opd_id,
-      dispensed_items, // [{ stock_ids, units }]
-      dispensed_to_worker_id
-    } = req.body;
+    try {
+        const {
+            opd_id,
+            dispensed_items, // [{ stock_ids, units }]
+            dispensed_to_worker_id,
+        } = req.body;
 
-    const dispensed_by = {
-      role: req.user.role,
-      userId: req.user.userId
-    };
-    if (!dispensed_items || !dispensed_items.length) {
-  await session.abortTransaction();
-  session.endSession();
+        const dispensed_by = {
+            role: req.user.role,
+            userId: req.user.userId,
+        };
+        if (!dispensed_items || !dispensed_items.length) {
+            await session.abortTransaction();
+            session.endSession();
 
-  return res.status(400).json({
-    success: false,
-    message: "No medicines provided for dispensing"
-  });
-}
+            return res.status(400).json({
+                success: false,
+                message: "No medicines provided for dispensing",
+            });
+        }
 
-    const finalItems = [];
+        const finalItems = [];
 
-    // 🔁 Process each item
-    for (const item of dispensed_items) {
-      if (!item.stock_ids || item.stock_ids.length === 0) continue;
+        // 🔁 Process each item
+        for (const item of dispensed_items) {
+            if (!item.stock_ids || item.stock_ids.length === 0) continue;
 
-      const stockId = item.stock_ids[0]; // FIFO: first one
-      const unitsToDispense = Number(item.units);
+            const stockId = item.stock_ids[0]; // FIFO: first one
+            const unitsToDispense = Number(item.units);
 
-      if (!Number.isInteger(unitsToDispense)) {
-  throw new Error("Units must be integer");
-}
+            if (!Number.isInteger(unitsToDispense)) {
+                throw new Error("Units must be integer");
+            }
 
-      if (unitsToDispense <= 0) {
-        throw new Error("Invalid dispense quantity");
-      }
+            if (unitsToDispense <= 0) {
+                throw new Error("Invalid dispense quantity");
+            }
 
-      // 🔍 Fetch stock
-      const stock = await Stock.findOne({
-  id: stockId,
-}).session(session);
+            // 🔍 Fetch stock
+            const stock = await Stock.findOne({
+                id: stockId,
+            }).session(session);
 
-if (!stock) {
-  throw new Error(`Stock ${stockId} not found`);
-}
+            if (!stock) {
+                throw new Error(`Stock ${stockId} not found`);
+            }
 
-if (stock.units < unitsToDispense) {
-  throw new Error(
-    `Insufficient stock for ${stock.item_name}. Available: ${stock.units}, Requested: ${unitsToDispense}`
-  );
-}
+            if (stock.units < unitsToDispense) {
+                throw new Error(
+                    `Insufficient stock for ${stock.item_name}. Available: ${stock.units}, Requested: ${unitsToDispense}`,
+                );
+            }
 
-// Expiry validation
-if (
-  stock.expiry_date &&
-  stock.expiry_date < new Date()
-) {
-  throw new Error(
-    `${stock.item_name} batch has expired`
-  );
-}
+            // Expiry validation
+            if (stock.expiry_date && stock.expiry_date < new Date()) {
+                throw new Error(`${stock.item_name} batch has expired`);
+            }
 
-      // ➖ Deduct units
-      stock.units -= unitsToDispense;
-      await stock.save({ session });
+            // ➖ Deduct units
+            stock.units -= unitsToDispense;
+            await stock.save({ session });
 
-      finalItems.push({
-        stock_id: stockId,
-        units: unitsToDispense
-      });
+            finalItems.push({
+                stock_id: stockId,
+                units: unitsToDispense,
+            });
+        }
+
+        // 🧾 Create Dispense record
+        const dispense = new Dispense({
+            opd_id,
+            dispensed_items: finalItems,
+            dispensed_to_worker_id,
+            dispensed_by,
+        });
+
+        await dispense.save({ session });
+
+        // ✅ Mark OPD as dispensed
+        if (opd_id) {
+            await OPD.findOneAndUpdate(
+                { id: opd_id },
+                { medicine_dispensed: true },
+                { session },
+            );
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(201).json({
+            success: true,
+            message: "Medicines dispensed successfully",
+            dispense,
+        });
+    } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
     }
-
-    // 🧾 Create Dispense record
-    const dispense = new Dispense({
-      opd_id,
-      dispensed_items: finalItems,
-      dispensed_to_worker_id,
-      dispensed_by
-    });
-
-    await dispense.save({ session });
-
-    // ✅ Mark OPD as dispensed
-    if(opd_id){
-    await OPD.findOneAndUpdate(
-      { id: opd_id },
-      { medicine_dispensed: true },
-      { session }
-    );
-  }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    res.status(201).json({
-      success: true,
-      message: "Medicines dispensed successfully",
-      dispense
-    });
-
-  } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
 });
 
 router.get("/history", protect, async (req, res) => {
-  try {
-    const data = await Dispense.aggregate([
-      {
-        $lookup: {
-          from: "workers",
-          localField: "dispensed_to_worker_id",
-          foreignField: "id",
-          as: "worker",
-        },
-      },
-
-      {
-        $lookup: {
-          from: "stocks",
-          localField: "dispensed_items.stock_id",
-          foreignField: "id",
-          as: "stocks",
-        },
-      },
-
-      {
-  $addFields: {
-    stocks: {
-      $map: {
-        input: "$stocks",
-        as: "stock",
-        in: {
-          $mergeObjects: [
-            "$$stock",
+    try {
+        const data = await Dispense.aggregate([
             {
-              dispensed_units: {
-                $sum: {
-                  $map: {
-                    input: {
-                      $filter: {
-                        input: "$dispensed_items",
-                        as: "item",
-                        cond: {
-                          $eq: [
-                            "$$item.stock_id",
-                            "$$stock.id"
-                          ]
-                        }
-                      }
+                $lookup: {
+                    from: "workers",
+                    localField: "dispensed_to_worker_id",
+                    foreignField: "id",
+                    as: "worker",
+                },
+            },
+
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "dispensed_items.stock_id",
+                    foreignField: "id",
+                    as: "stocks",
+                },
+            },
+
+            {
+                $addFields: {
+                    stocks: {
+                        $map: {
+                            input: "$stocks",
+                            as: "stock",
+                            in: {
+                                $mergeObjects: [
+                                    "$$stock",
+                                    {
+                                        dispensed_units: {
+                                            $sum: {
+                                                $map: {
+                                                    input: {
+                                                        $filter: {
+                                                            input: "$dispensed_items",
+                                                            as: "item",
+                                                            cond: {
+                                                                $eq: [
+                                                                    "$$item.stock_id",
+                                                                    "$$stock.id",
+                                                                ],
+                                                            },
+                                                        },
+                                                    },
+                                                    as: "matched",
+                                                    in: "$$matched.units",
+                                                },
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
                     },
-                    as: "matched",
-                    in: "$$matched.units"
-                  }
-                }
-              }
-            }
-          ]
-        }
-      }
+                },
+            },
+
+            {
+                $sort: {
+                    dispensed_on: -1,
+                },
+            },
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data,
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
     }
-  }
-},
-
-      {
-        $sort: {
-          dispensed_on: -1,
-        },
-      },
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
 });
 
 //local
@@ -517,6 +513,224 @@ router.get("/stock/search", protect, async (req, res) => {
         res.json({
             success: true,
             data: stocks,
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+});
+
+router.get("/balance-sheet", async (req, res) => {
+    try {
+        const { date } = req.query;
+
+        if (!date) {
+            return res.status(400).json({
+                success: false,
+                message: "date is required",
+            });
+        }
+
+        const selectedDate = new Date(date);
+
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+
+        const procuredBefore = await Procurement.aggregate([
+            {
+                $match: {
+                    procurement_date: {
+                        $lt: selectedDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$items",
+            },
+
+            {
+                $group: {
+                    _id: "$items.medicine_id",
+                    units: {
+                        $sum: "$items.units",
+                    },
+                },
+            },
+        ]);
+
+        const dispensedBefore = await Dispense.aggregate([
+            {
+                $match: {
+                    adjustment: { $ne: true },
+                    dispensed_on: {
+                        $lt: selectedDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$dispensed_items",
+            },
+
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "dispensed_items.stock_id",
+                    foreignField: "id",
+                    as: "stock",
+                },
+            },
+
+            {
+                $unwind: "$stock",
+            },
+
+            {
+                $group: {
+                    _id: "$stock.medicine_id",
+                    units: {
+                        $sum: "$dispensed_items.units",
+                    },
+                },
+            },
+        ]);
+
+        const procuredBeforeMap = new Map(
+            procuredBefore.map((item) => [item._id, item.units]),
+        );
+
+        const dispensedBeforeMap = new Map(
+            dispensedBefore.map((item) => [item._id, item.units]),
+        );
+
+        const procuredDuring = await Procurement.aggregate([
+            {
+                $match: {
+                    procurement_date: {
+                        $gte: selectedDate,
+                        $lt: nextDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$items",
+            },
+
+            {
+                $group: {
+                    _id: "$items.medicine_id",
+                    units: {
+                        $sum: "$items.units",
+                    },
+                },
+            },
+        ]);
+
+        const dispensedDuring = await Dispense.aggregate([
+            {
+                $match: {
+                    adjustment: { $ne: true },
+                    dispensed_on: {
+                        $gte: selectedDate,
+                        $lt: nextDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$dispensed_items",
+            },
+
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "dispensed_items.stock_id",
+                    foreignField: "id",
+                    as: "stock",
+                },
+            },
+
+            {
+                $unwind: "$stock",
+            },
+
+            {
+                $group: {
+                    _id: "$stock.medicine_id",
+                    units: {
+                        $sum: "$dispensed_items.units",
+                    },
+                },
+            },
+        ]);
+
+        const procuredDuringMap = new Map(
+            procuredDuring.map((item) => [item._id, item.units]),
+        );
+
+        const dispensedDuringMap = new Map(
+            dispensedDuring.map((item) => [item._id, item.units]),
+        );
+
+        const medicineIds = new Set([
+            ...procuredBefore.map((x) => x._id),
+            ...dispensedBefore.map((x) => x._id),
+            ...procuredDuring.map((x) => x._id),
+            ...dispensedDuring.map((x) => x._id),
+        ]);
+
+        const openingBalances = [];
+
+        for (const medicineId of medicineIds) {
+            const procured = procuredBeforeMap.get(medicineId) || 0;
+
+            const dispensed = dispensedBeforeMap.get(medicineId) || 0;
+
+            openingBalances.push({
+                medicine_id: medicineId,
+
+                opening_units: procured - dispensed,
+
+                procured_units: procuredDuringMap.get(medicineId) || 0,
+
+                dispensed_units: dispensedDuringMap.get(medicineId) || 0,
+            });
+        }
+
+        const medicineIdsArray = openingBalances.map(
+            (item) => item.medicine_id,
+        );
+
+        const medicines = await Medicines.find({
+            id: { $in: medicineIdsArray },
+        });
+
+        const medicineMap = new Map(
+            medicines.map((m) => [m.id, m.drug_name_and_dose]),
+        );
+
+        const balanceSheet = openingBalances.map((item) => ({
+            medicine_id: item.medicine_id,
+
+            medicine_name: medicineMap.get(item.medicine_id) || "Unknown",
+
+            opening_units: item.opening_units,
+
+            procured_units: item.procured_units,
+
+            dispensed_units: item.dispensed_units,
+
+            closing_units:
+                item.opening_units + item.procured_units - item.dispensed_units,
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: balanceSheet,
         });
     } catch (err) {
         res.status(500).json({
