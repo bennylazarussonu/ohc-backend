@@ -564,7 +564,7 @@ router.get("/balance-sheet", async (req, res) => {
         const dispensedBefore = await Dispense.aggregate([
             {
                 $match: {
-                    adjustment: { $ne: true },
+                    // adjustment: { $ne: true },
                     dispensed_on: {
                         $lt: selectedDate,
                     },
@@ -633,7 +633,7 @@ router.get("/balance-sheet", async (req, res) => {
         const dispensedDuring = await Dispense.aggregate([
             {
                 $match: {
-                    adjustment: { $ne: true },
+                    // adjustment: { $ne: true },
                     dispensed_on: {
                         $gte: selectedDate,
                         $lt: nextDate,
