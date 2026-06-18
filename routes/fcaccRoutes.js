@@ -71,23 +71,24 @@ router.post("/fitness-clearance", protect, async (req, res) => {
         }
 
         const fcacc = await FCACC.create({
-                worker_id,
-                date_of_issuance_of_certificate_for_competency_clearance,
-                competency_assessment_by,
-                examination_findings: {
-                    general_examination,
-                    pulse,
-                    blood_pressure: {
-                        systolic,
-                        diastolic
-                    },
-                    spo2,
-                    height,
-                    weight,
-                    opthalmic_examination,
-                    vertigo_test_passed
-                }
-            });
+    worker_id,
+    date_of_issuance_of_certificate_for_competency_clearance,
+    competency_assessment_by,
+
+    examination_findings: {
+        general_examination,
+        pulse,
+        blood_pressure: {
+            systolic,
+            diastolic
+        },
+        opthalmic_examination,
+        spo2,
+        height,
+        weight,
+        vertigo_test_passed
+    }
+});
 
             return res.status(201).json({ message: "FCACC record created successfully", fcacc, worker});
     }catch (err) {
@@ -118,22 +119,23 @@ router.put("/fitness-clearance/:id", protect, async (req, res) => {
         const updated = await FCACC.findByIdAndUpdate(
             id,
             {
-                competency_assessment_by,
-                date_of_issuance_of_certificate_for_competency_clearance,
-                examination_findings: {
-                    general_examination,
-                    pulse,
-                    blood_pressure: {
-                        systolic,
-                        diastolic
-                    },
-                    spo2,
-                    height,
-                    weight,
-                    opthalmic_examination,
-                    vertigo_test_passed
-                }
-            },
+    competency_assessment_by,
+    date_of_issuance_of_certificate_for_competency_clearance,
+
+    examination_findings: {
+        general_examination,
+        pulse,
+        blood_pressure: {
+            systolic,
+            diastolic
+        },
+        opthalmic_examination,
+        spo2,
+        height,
+        weight,
+        vertigo_test_passed
+    }
+},
             { new: true }
         );
 
