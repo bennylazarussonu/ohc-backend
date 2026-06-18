@@ -779,6 +779,93 @@ router.get("/balance-sheet-range", async (req, res) => {
         const startDate = new Date(`${from}T00:00:00.000Z`);
         const endDate = new Date(`${to}T23:59:59.999Z`);
 
+        const procuredBefore = await Procurement.aggregate([
+            {
+                $match: {
+                    procurement_date: {
+                        $lt: startDate,
+                    },
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: "$items.medicine_id",
+                    units: {
+                        $sum: "$items.units",
+                    },
+                },
+            },
+        ]);
+
+        const dispensedBefore = await Dispense.aggregate([
+            {
+                $match: {
+                    dispensed_on: {
+                        $lt: startDate,
+                    },
+                },
+            },
+            {
+                $unwind: "$dispensed_items",
+            },
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "dispensed_items.stock_id",
+                    foreignField: "id",
+                    as: "stock",
+                },
+            },
+            {
+                $unwind: "$stock",
+            },
+            {
+                $group: {
+                    _id: "$stock.medicine_id",
+                    units: {
+                        $sum: "$dispensed_items.units",
+                    },
+                },
+            },
+        ]);
+
+        const procuredDuring = await Procurement.aggregate([
+            {
+                $match: {
+                    procurement_date: {
+                        $gte: startDate,
+                        $lte: endDate,
+                    },
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: "$items.medicine_id",
+                    units: {
+                        $sum: "$items.units",
+                    },
+                },
+            },
+        ]);
+
+        const procuredBeforeMap = new Map(
+            procuredBefore.map((x) => [x._id, x.units]),
+        );
+
+        const dispensedBeforeMap = new Map(
+            dispensedBefore.map((x) => [x._id, x.units]),
+        );
+
+        const procuredDuringMap = new Map(
+            procuredDuring.map((x) => [x._id, x.units]),
+        );
+
         console.log("startDate", startDate);
         console.log("endDate", endDate);
 
@@ -833,7 +920,25 @@ router.get("/balance-sheet-range", async (req, res) => {
             },
         ]);
 
-        const medicineIds = [...new Set(dispenses.map((x) => x.medicine_id))];
+        const dispensedDuringMap = new Map();
+
+        for (const record of dispenses) {
+            dispensedDuringMap.set(
+                record.medicine_id,
+                (dispensedDuringMap.get(record.medicine_id) || 0) +
+                    record.units,
+            );
+        }
+
+        const medicineIds = [
+    ...new Set([
+        ...dispenses.map((x) => x.medicine_id),
+        ...procuredBefore.map((x) => x._id),
+        ...dispensedBefore.map((x) => x._id),
+        ...procuredDuring.map((x) => x._id),
+        ...dispensedDuringMap.keys(),
+    ]),
+];
 
         const medicines = await Medicines.find({
             id: { $in: medicineIds },
@@ -847,9 +952,25 @@ router.get("/balance-sheet-range", async (req, res) => {
 
         for (const record of dispenses) {
             if (!rows[record.medicine_id]) {
+                const openingBalance =
+                    (procuredBeforeMap.get(record.medicine_id) || 0) -
+                    (dispensedBeforeMap.get(record.medicine_id) || 0);
+
+                const procuredInRange =
+                    procuredDuringMap.get(record.medicine_id) || 0;
+
+                const dispensedInRange =
+                    dispensedDuringMap.get(record.medicine_id) || 0;
+
                 rows[record.medicine_id] = {
                     medicine_id: record.medicine_id,
+
                     medicine_name: medicineMap.get(record.medicine_id),
+
+                    opening_balance: openingBalance,
+
+                    closing_balance:
+                        openingBalance + procuredInRange - dispensedInRange,
 
                     daily: {},
                 };
@@ -861,6 +982,42 @@ router.get("/balance-sheet-range", async (req, res) => {
 
             rows[record.medicine_id].daily[record.date] += record.units;
         }
+
+        for (const medicineId of medicineIds) {
+
+    if (rows[medicineId]) continue;
+
+    const openingBalance =
+        (procuredBeforeMap.get(medicineId) || 0)
+        -
+        (dispensedBeforeMap.get(medicineId) || 0);
+
+    const procuredInRange =
+        procuredDuringMap.get(medicineId) || 0;
+
+    const dispensedInRange =
+        dispensedDuringMap.get(medicineId) || 0;
+
+    rows[medicineId] = {
+        medicine_id: medicineId,
+
+        medicine_name:
+            medicineMap.get(medicineId),
+
+        opening_balance: openingBalance,
+
+        closing_balance:
+            openingBalance +
+            procuredInRange -
+            dispensedInRange,
+
+        daily: {}
+    };
+
+    dates.forEach(date => {
+        rows[medicineId].daily[date] = 0;
+    });
+}
 
         res.json({
             success: true,
