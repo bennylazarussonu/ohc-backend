@@ -963,17 +963,22 @@ router.get("/balance-sheet-range", async (req, res) => {
                     dispensedDuringMap.get(record.medicine_id) || 0;
 
                 rows[record.medicine_id] = {
-                    medicine_id: record.medicine_id,
+    medicine_id: record.medicine_id,
+    medicine_name: medicineMap.get(record.medicine_id),
 
-                    medicine_name: medicineMap.get(record.medicine_id),
+    opening_balance: openingBalance,
 
-                    opening_balance: openingBalance,
+    procured_in_range: procuredInRange,
 
-                    closing_balance:
-                        openingBalance + procuredInRange - dispensedInRange,
+    dispensed_in_range: dispensedInRange,
 
-                    daily: {},
-                };
+    closing_balance:
+        openingBalance +
+        procuredInRange -
+        dispensedInRange,
+
+    daily: {},
+};
 
                 dates.forEach((date) => {
                     rows[record.medicine_id].daily[date] = 0;
@@ -1005,6 +1010,9 @@ router.get("/balance-sheet-range", async (req, res) => {
             medicineMap.get(medicineId),
 
         opening_balance: openingBalance,
+
+        procured_in_range: procuredInRange,
+dispensed_in_range: dispensedInRange,
 
         closing_balance:
             openingBalance +
