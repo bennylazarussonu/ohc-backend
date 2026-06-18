@@ -740,4 +740,139 @@ router.get("/balance-sheet", async (req, res) => {
     }
 });
 
+router.get("/balance-sheet-range", async (req, res) => {
+    try {
+        const { from, to } = req.query;
+
+        if (!from || !to) {
+            return res.status(400).json({
+                success: false,
+                message: "from and to dates are required",
+            });
+        }
+
+        if (new Date(from) > new Date(to)) {
+            return res.status(400).json({
+                success: false,
+                message: "from date cannot be greater than to date",
+            });
+        }
+
+        const dates = [];
+
+        const toDate = new Date(to);
+        const diffDays = (toDate - new Date(from)) / (1000 * 60 * 60 * 24);
+
+        if (diffDays > 90) {
+            return res.status(400).json({
+                success: false,
+                message: "Maximum range is 90 days",
+            });
+        }
+        let current = new Date(from);
+
+        while (current <= toDate) {
+            dates.push(current.toISOString().split("T")[0]);
+            current.setDate(current.getDate() + 1);
+        }
+
+        const startDate = new Date(`${from}T00:00:00.000Z`);
+        const endDate = new Date(`${to}T23:59:59.999Z`);
+
+        console.log("startDate", startDate);
+        console.log("endDate", endDate);
+
+        const count = await Dispense.countDocuments({
+            dispensed_on: {
+                $gte: startDate,
+                $lte: endDate,
+            },
+        });
+
+        console.log("count =", count);
+
+        const dispenses = await Dispense.aggregate([
+            {
+                $match: {
+                    dispensed_on: {
+                        $gte: startDate,
+                        $lte: endDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$dispensed_items",
+            },
+
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "dispensed_items.stock_id",
+                    foreignField: "id",
+                    as: "stock",
+                },
+            },
+
+            {
+                $unwind: "$stock",
+            },
+
+            {
+                $project: {
+                    medicine_id: "$stock.medicine_id",
+                    units: "$dispensed_items.units",
+
+                    date: {
+                        $dateToString: {
+                            format: "%Y-%m-%d",
+                            date: "$dispensed_on",
+                        },
+                    },
+                },
+            },
+        ]);
+
+        const medicineIds = [...new Set(dispenses.map((x) => x.medicine_id))];
+
+        const medicines = await Medicines.find({
+            id: { $in: medicineIds },
+        });
+
+        const medicineMap = new Map(
+            medicines.map((m) => [m.id, m.drug_name_and_dose]),
+        );
+
+        const rows = {};
+
+        for (const record of dispenses) {
+            if (!rows[record.medicine_id]) {
+                rows[record.medicine_id] = {
+                    medicine_id: record.medicine_id,
+                    medicine_name: medicineMap.get(record.medicine_id),
+
+                    daily: {},
+                };
+
+                dates.forEach((date) => {
+                    rows[record.medicine_id].daily[date] = 0;
+                });
+            }
+
+            rows[record.medicine_id].daily[record.date] += record.units;
+        }
+
+        res.json({
+            success: true,
+            dates,
+            data: Object.values(rows),
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+});
+
 export default router;
