@@ -3,6 +3,8 @@ import StockAdjustment from "../models/StockAdjustment.js";
 import express from "express";
 import Dispense from "../models/Dispense.js";
 import mongoose from "mongoose";
+import Medicines from "../models/Medicines.js";
+import Procurement from "../models/Procurement.js";
 import { protect } from "../middlewares/auth.js";
 
 const router = express.Router();
@@ -398,4 +400,30 @@ router.post("/reconcile-opening", protect, async (req, res) => {
 //   }
 // });
 
+router.get(
+    "/reconciliation-stock",
+    protect,
+    async (req, res) => {
+        try {
+            const stocks = await Stock.find({
+                units: { $gte: 0 }
+            })
+            .sort({
+                item_name: 1,
+                expiry_date: 1
+            });
+
+            res.json({
+                success: true,
+                data: stocks
+            });
+
+        } catch (err) {
+            res.status(500).json({
+                success: false,
+                message: err.message
+            });
+        }
+    }
+);
 export default router;
