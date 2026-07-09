@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Worker from "../models/Worker.js";
 import Medicines from "../models/Medicines.js";
 import Procurement from "../models/Procurement.js";
+import StockVerification from "../models/StockVerification.js";
 
 const router = express.Router();
 
@@ -931,14 +932,14 @@ router.get("/balance-sheet-range", async (req, res) => {
         }
 
         const medicineIds = [
-    ...new Set([
-        ...dispenses.map((x) => x.medicine_id),
-        ...procuredBefore.map((x) => x._id),
-        ...dispensedBefore.map((x) => x._id),
-        ...procuredDuring.map((x) => x._id),
-        ...dispensedDuringMap.keys(),
-    ]),
-];
+            ...new Set([
+                ...dispenses.map((x) => x.medicine_id),
+                ...procuredBefore.map((x) => x._id),
+                ...dispensedBefore.map((x) => x._id),
+                ...procuredDuring.map((x) => x._id),
+                ...dispensedDuringMap.keys(),
+            ]),
+        ];
 
         const medicines = await Medicines.find({
             id: { $in: medicineIds },
@@ -963,22 +964,20 @@ router.get("/balance-sheet-range", async (req, res) => {
                     dispensedDuringMap.get(record.medicine_id) || 0;
 
                 rows[record.medicine_id] = {
-    medicine_id: record.medicine_id,
-    medicine_name: medicineMap.get(record.medicine_id),
+                    medicine_id: record.medicine_id,
+                    medicine_name: medicineMap.get(record.medicine_id),
 
-    opening_balance: openingBalance,
+                    opening_balance: openingBalance,
 
-    procured_in_range: procuredInRange,
+                    procured_in_range: procuredInRange,
 
-    dispensed_in_range: dispensedInRange,
+                    dispensed_in_range: dispensedInRange,
 
-    closing_balance:
-        openingBalance +
-        procuredInRange -
-        dispensedInRange,
+                    closing_balance:
+                        openingBalance + procuredInRange - dispensedInRange,
 
-    daily: {},
-};
+                    daily: {},
+                };
 
                 dates.forEach((date) => {
                     rows[record.medicine_id].daily[date] = 0;
@@ -989,48 +988,311 @@ router.get("/balance-sheet-range", async (req, res) => {
         }
 
         for (const medicineId of medicineIds) {
+            if (rows[medicineId]) continue;
 
-    if (rows[medicineId]) continue;
+            const openingBalance =
+                (procuredBeforeMap.get(medicineId) || 0) -
+                (dispensedBeforeMap.get(medicineId) || 0);
 
-    const openingBalance =
-        (procuredBeforeMap.get(medicineId) || 0)
-        -
-        (dispensedBeforeMap.get(medicineId) || 0);
+            const procuredInRange = procuredDuringMap.get(medicineId) || 0;
 
-    const procuredInRange =
-        procuredDuringMap.get(medicineId) || 0;
+            const dispensedInRange = dispensedDuringMap.get(medicineId) || 0;
 
-    const dispensedInRange =
-        dispensedDuringMap.get(medicineId) || 0;
+            rows[medicineId] = {
+                medicine_id: medicineId,
 
-    rows[medicineId] = {
-        medicine_id: medicineId,
+                medicine_name: medicineMap.get(medicineId),
 
-        medicine_name:
-            medicineMap.get(medicineId),
+                opening_balance: openingBalance,
 
-        opening_balance: openingBalance,
+                procured_in_range: procuredInRange,
+                dispensed_in_range: dispensedInRange,
 
-        procured_in_range: procuredInRange,
-dispensed_in_range: dispensedInRange,
+                closing_balance:
+                    openingBalance + procuredInRange - dispensedInRange,
 
-        closing_balance:
-            openingBalance +
-            procuredInRange -
-            dispensedInRange,
+                daily: {},
+            };
 
-        daily: {}
-    };
-
-    dates.forEach(date => {
-        rows[medicineId].daily[date] = 0;
-    });
-}
+            dates.forEach((date) => {
+                rows[medicineId].daily[date] = 0;
+            });
+        }
 
         res.json({
             success: true,
             dates,
             data: Object.values(rows),
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+});
+
+router.get("/verify-stock", protect, async (req, res) => {
+    try {
+        const now = new Date();
+
+        const startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
+
+        const dispensedStocks = await Dispense.aggregate([
+            {
+                $match: {
+                    adjustment: { $ne: true },
+
+                    dispensed_on: {
+                        $gte: startDate,
+                        $lte: endDate,
+                    },
+                },
+            },
+
+            {
+                $unwind: "$dispensed_items",
+            },
+
+            {
+                $group: {
+                    _id: "$dispensed_items.stock_id",
+
+                    dispensed_units: {
+                        $sum: "$dispensed_items.units",
+                    },
+
+                    dispense_count: {
+                        $sum: 1,
+                    },
+
+                    last_dispensed_on: {
+                        $max: "$dispensed_on",
+                    },
+                },
+            },
+
+            {
+                $lookup: {
+                    from: "stocks",
+                    localField: "_id",
+                    foreignField: "id",
+                    as: "stock",
+                },
+            },
+
+            {
+                $unwind: "$stock",
+            },
+
+            {
+                $project: {
+                    _id: 0,
+
+                    stock_id: "$stock.id",
+                    medicine_id: "$stock.medicine_id",
+                    item_name: "$stock.item_name",
+                    brand: "$stock.brand",
+                    expiry_date: "$stock.expiry_date",
+
+                    current_units: "$stock.units",
+
+                    dispensed_units: 1,
+                    dispense_count: 1,
+                    last_dispensed_on: 1,
+                },
+            },
+
+            {
+                $sort: {
+                    item_name: 1,
+                    expiry_date: 1,
+                },
+            },
+        ]);
+
+        const stockIds = dispensedStocks.map((item) => item.stock_id);
+
+        const verifications = await StockVerification.find({
+            stock_id: {
+                $in: stockIds,
+            },
+
+            verification_date: {
+                $gte: startDate,
+                $lte: endDate,
+            },
+        }).lean();
+
+        const verificationMap = new Map(
+            verifications.map((item) => [item.stock_id, item]),
+        );
+
+        const data = dispensedStocks.map((stock) => {
+            const verification = verificationMap.get(stock.stock_id);
+
+            return {
+                ...stock,
+
+                verification: verification
+                    ? {
+                          id: verification.id,
+                          expected_units: verification.expected_units,
+
+                          physical_units: verification.physical_units,
+
+                          difference: verification.difference,
+
+                          status: verification.status,
+
+                          verified_by: verification.verified_by,
+
+                          verified_on: verification.verified_on,
+                      }
+                    : null,
+
+                status: verification ? verification.status : "UNVERIFIED",
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data,
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+});
+
+router.post("/verify-stock/:stockId", protect, async (req, res) => {
+    try {
+        const stockId = Number(req.params.stockId);
+
+        const { physical_units } = req.body;
+
+        if (
+            physical_units === undefined ||
+            physical_units === null ||
+            physical_units === ""
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Physical remaining units are required",
+            });
+        }
+
+        const physicalUnits = Number(physical_units);
+
+        if (!Number.isInteger(physicalUnits) || physicalUnits < 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Physical units must be a non-negative integer",
+            });
+        }
+
+        const now = new Date();
+
+        const startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
+
+        const stock = await Stock.findOne({
+            id: stockId,
+        });
+
+        if (!stock) {
+            return res.status(404).json({
+                success: false,
+                message: "Stock not found",
+            });
+        }
+
+        /*
+                Confirm that this stock was actually
+                dispensed today.
+            */
+        const dispenseExists = await Dispense.exists({
+            adjustment: { $ne: true },
+
+            dispensed_on: {
+                $gte: startDate,
+                $lte: endDate,
+            },
+
+            "dispensed_items.stock_id": stockId,
+        });
+
+        if (!dispenseExists) {
+            return res.status(400).json({
+                success: false,
+                message: "This stock was not dispensed today",
+            });
+        }
+
+        /*
+                Prevent duplicate verification for today.
+            */
+        const existing = await StockVerification.findOne({
+            stock_id: stockId,
+
+            verification_date: {
+                $gte: startDate,
+                $lte: endDate,
+            },
+        });
+
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                message: "This stock has already been verified today",
+            });
+        }
+
+        const expectedUnits = stock.units;
+
+        const difference = physicalUnits - expectedUnits;
+
+        const status = difference === 0 ? "VERIFIED" : "DISPUTE";
+
+        const verification = new StockVerification({
+            stock_id: stockId,
+
+            verification_date: new Date(),
+
+            expected_units: expectedUnits,
+
+            physical_units: physicalUnits,
+
+            difference,
+
+            status,
+
+            verified_by: {
+                role: req.user.role,
+                userId: req.user.userId,
+            },
+        });
+
+        await verification.save();
+
+        res.status(201).json({
+            success: true,
+
+            message:
+                status === "VERIFIED"
+                    ? "Stock verified successfully"
+                    : "Stock moved to disputes",
+
+            data: verification,
         });
     } catch (err) {
         res.status(500).json({
