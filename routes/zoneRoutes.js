@@ -1,10 +1,10 @@
 // routes/zones.js
 import express from "express";
 import Zone from "../models/Zone.js";
-import ZoneItem from "../models/ZoneItem.js";
+// import ZoneItem from "../models/ZoneItem.js";
 import Medicines from "../models/Medicines.js";
 import Stock from "../models/Stock.js";
-import ZoneConsumption from "../models/ZoneConsumption.js";
+// import ZoneConsumption from "../models/ZoneConsumption.js";
 
 const router = express.Router();
 

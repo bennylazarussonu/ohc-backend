@@ -1,7 +1,7 @@
 import cron from "node-cron";
 
 import Stock from "../models/Stock.js";
-import ZoneItem from "../models/ZoneItem.js";
+// import ZoneItem from "../models/ZoneItem.js";
 import ExpiredMedicineLog from "../models/ExpiredMedicineLog.js";
 
 const startExpiryCron = () => {

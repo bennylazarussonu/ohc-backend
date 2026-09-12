@@ -24,8 +24,7 @@ import malariaRoutes from './routes/malariaRoutes.js';
 import zoneRoutes from "./routes/zoneRoutes.js";
 import startExpiryCron from './jobs/expireMedicine.js';
 import medicineExpiryRoutes from './routes/medicineExpiryRoutes.js';
-import zoneTemplateRoutes from "./routes/zoneTemplateRoutes.js";
-import zoneInventoryRoutes from "./routes/zoneInventoryRoutes.js";
+import fabRoutes from './routes/fabRoutes.js';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -54,8 +53,7 @@ app.use("/api/fcacc", fcaccRoutes);
 app.use("/api/malaria", malariaRoutes);
 app.use("/api/fab/zones", zoneRoutes);
 app.use("/api/medicine-expiry", medicineExpiryRoutes);
-app.use("/api/fab/templates", zoneTemplateRoutes);
-app.use("/api/fab/inventory", zoneInventoryRoutes);
+app.use("/api/fab/", fabRoutes);
 
 
 app.get("/", (request, response) => {
