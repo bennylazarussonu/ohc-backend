@@ -1,9 +1,14 @@
 // routes/zones.js
 import express from "express";
 import Zone from "../models/Zone.js";
-// import ZoneItem from "../models/ZoneItem.js";
 import Medicines from "../models/Medicines.js";
 import Stock from "../models/Stock.js";
+import FABInventoryBatch from "../models/FABInventoryBatch.js";
+import FABConsumption from "../models/FABConsumption.js";
+import FABInventoryAdjustment from "../models/FABInventoryAdjustment.js";
+import FABAllocation from "../models/FABAllocation.js";
+import FABTemplateItem from "../models/FABTemplateItem.js";
+import FABVisit from "../models/FABVisit.js";
 // import ZoneConsumption from "../models/ZoneConsumption.js";
 
 const router = express.Router();
@@ -86,12 +91,102 @@ router.put("/:id", async (req, res) => {
     res.json(updated);
 });
 
-router.delete("/:id", async (req, res) => {
-    await Zone.deleteOne({ id: req.params.id });
-    await ZoneItem.deleteMany({ zone_id: req.params.id });
+router.delete("/:zone_id", async (req, res) => {
+    try {
+        const zoneId = Number(req.params.zone_id);
+        const { return_to_stock = false } = req.body;
 
-    res.json({ message: "Zone deleted" });
+        if (!Number.isInteger(zoneId)) {
+            return res.status(400).json({
+                message: "Invalid zone ID"
+            });
+        }
+
+        const zone = await Zone.findOne({ id: zoneId });
+
+        if (!zone) {
+            return res.status(404).json({
+                message: "Zone not found"
+            });
+        }
+
+        // --------------------------------------------------
+        // 1. Return remaining CENTRAL_STOCK inventory
+        // --------------------------------------------------
+        if (return_to_stock) {
+            const inventoryBatches = await FABInventoryBatch.find({
+                zone_id: zoneId,
+                source_type: "CENTRAL_STOCK",
+                quantity: { $gt: 0 }
+            });
+
+            for (const batch of inventoryBatches) {
+                await Stock.updateOne(
+                    { id: batch.source_id },
+                    {
+                        $inc: {
+                            units: batch.quantity
+                        }
+                    }
+                );
+            }
+        }
+
+        // --------------------------------------------------
+        // 2. Delete FAB transaction/history records
+        // --------------------------------------------------
+        await FABConsumption.deleteMany({
+            zone_id: zoneId
+        });
+
+        await FABInventoryAdjustment.deleteMany({
+            zone_id: zoneId
+        });
+
+        await FABAllocation.deleteMany({
+            zone_id: zoneId
+        });
+
+        await FABInventoryBatch.deleteMany({
+            zone_id: zoneId
+        });
+
+        await FABTemplateItem.deleteMany({
+            zone_id: zoneId
+        });
+
+        await FABVisit.deleteMany({
+            zone_id: zoneId
+        });
+
+        // --------------------------------------------------
+        // 3. Delete the Zone itself
+        // --------------------------------------------------
+        await Zone.deleteOne({
+            id: zoneId
+        });
+
+        res.json({
+            message: return_to_stock
+                ? "Zone deleted and remaining stock returned successfully."
+                : "Zone deleted successfully."
+        });
+
+    } catch (error) {
+        console.error("Delete zone error:", error);
+
+        res.status(500).json({
+            message: "Failed to delete zone"
+        });
+    }
 });
+
+// router.delete("/:id", async (req, res) => {
+//     await Zone.deleteOne({ id: req.params.id });
+//     await ZoneItem.deleteMany({ zone_id: req.params.id });
+
+//     res.json({ message: "Zone deleted" });
+// });
 
 router.get("/:zoneId/items", async (req, res) => {
     const zoneId = Number(req.params.zoneId);
