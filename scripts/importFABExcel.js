@@ -25,7 +25,7 @@ console.log(`Found ${workbook.SheetNames.length} sheets.`);
 console.log(workbook.SheetNames);
 
 const fabSheets = [
-    "Z1",
+    "Copy of Z1",
     "Z2",
     "BSZ1",
     "BSZ3",
@@ -36,14 +36,12 @@ const fabSheets = [
     "MAHUL_LC",
     "ADMIN_BLK",
     "THANEHC",
-    "CONCSLABZ1",
     "HYDRA_Z3",
     "VEHICLEFABZ1",
     "KALINALC",
     "LIFTZ2",
     "CRANE",
     "XMG EXCAVATOR",
-    "ELEC BUS",
     "Copy of ELEC BUS"
 ];
 
