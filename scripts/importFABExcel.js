@@ -42,7 +42,7 @@ const fabSheets = [
     "LIFTZ2",
     "CRANE",
     "XMG EXCAVATOR",
-    "Copy of ELEC BUS"
+    "Copy of ELEC BUS",
 ];
 
 function parseExpiryDate(value) {
@@ -63,9 +63,7 @@ function parseExpiryDate(value) {
             return null;
         }
 
-        return new Date(
-            Date.UTC(parsed.y, parsed.m - 1, parsed.d)
-        );
+        return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
     }
 
     // Date string
@@ -83,7 +81,7 @@ console.log("\n========== EXPIRY DATE TEST ==========");
 for (const value of [46784, 46692, "", "--", null]) {
     console.log({
         input: value,
-        output: parseExpiryDate(value)
+        output: parseExpiryDate(value),
     });
 }
 
@@ -143,8 +141,6 @@ console.log(fabSheets);
 //         });
 //     });
 // }
-
-
 
 // const unmatchedItems = new Map();
 
@@ -350,13 +346,16 @@ for (const sheetName of fabSheets) {
 
     const rows = XLSX.utils.sheet_to_json(sheet, {
         header: 1,
-        defval: null
+        defval: null,
     });
 
-    const headerRowIndex = rows.findIndex(row =>
-        row.some(cell =>
-            String(cell ?? "").trim().toUpperCase() === "ITEM"
-        )
+    const headerRowIndex = rows.findIndex((row) =>
+        row.some(
+            (cell) =>
+                String(cell ?? "")
+                    .trim()
+                    .toUpperCase() === "ITEM",
+        ),
     );
 
     if (headerRowIndex === -1) {
@@ -364,15 +363,18 @@ for (const sheetName of fabSheets) {
         continue;
     }
 
-    const header = rows[headerRowIndex].map(cell =>
-        String(cell ?? "").trim().toUpperCase()
+    const header = rows[headerRowIndex].map((cell) =>
+        String(cell ?? "")
+            .trim()
+            .toUpperCase(),
     );
 
     const columns = {
-        item: header.indexOf("ITEM"),
-        qty: header.indexOf("QTY"),
-        expiry: header.indexOf("EXPIRY DATE")
-    };
+    item: header.indexOf("ITEM"),
+    qty: header.indexOf("QTY"),
+    expiry: header.indexOf("EXPIRY DATE"),
+    remarks: header.indexOf("REMARKS"),
+};
 
     if (columns.qty === -1 || columns.expiry === -1) {
         errors.push(`${sheetName}: required columns missing`);
@@ -383,6 +385,14 @@ for (const sheetName of fabSheets) {
 
     for (const row of inventoryRows) {
         const rawItem = row[columns.item];
+
+        const remarks = String(row[columns.remarks] ?? "")
+            .trim()
+            .toUpperCase();
+
+        if (remarks === "N.A.") {
+            continue;
+        }
 
         if (
             rawItem === null ||
@@ -399,7 +409,7 @@ for (const sheetName of fabSheets) {
         const expiry = parseExpiryDate(row[columns.expiry]);
 
         const medicine = await Medicines.findOne({
-            drug_name_and_dose: itemName
+            drug_name_and_dose: itemName,
         });
 
         if (!medicine) {
@@ -438,7 +448,7 @@ console.log(`Rows found: ${totalRows}`);
 console.log(`Valid rows: ${validRows}`);
 console.log(`Errors: ${errors.length}`);
 
-errors.forEach(error => console.log(`❌ ${error}`));
+errors.forEach((error) => console.log(`❌ ${error}`));
 
 if (errors.length > 0) {
     console.log("\nImport must not proceed until errors are resolved.");
@@ -448,16 +458,21 @@ if (errors.length > 0) {
 
 console.log("\n========== PRODUCTION ZONE CHECK ==========");
 
-const allZones = await Zone.find({}, {
-    id: 1,
-    zone_name: 1
-}).sort({ zone_name: 1 }).lean();
+const allZones = await Zone.find(
+    {},
+    {
+        id: 1,
+        zone_name: 1,
+    },
+)
+    .sort({ zone_name: 1 })
+    .lean();
 
 console.log("Zones found in production:", allZones.length);
 
 for (const zone of allZones) {
     console.log({
         id: zone.id,
-        zone_name: zone.zone_name
+        zone_name: zone.zone_name,
     });
 }
