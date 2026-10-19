@@ -333,6 +333,7 @@ console.log("\n========== PRE-IMPORT VALIDATION ==========");
 let totalRows = 0;
 let validRows = 0;
 const errors = [];
+const missingItems = new Map();
 
 for (const sheetName of fabSheets) {
     const zone = await Zone.findOne({ zone_name: sheetName });
@@ -370,11 +371,12 @@ for (const sheetName of fabSheets) {
     );
 
     const columns = {
-    item: header.indexOf("ITEM"),
-    qty: header.indexOf("QTY"),
-    expiry: header.indexOf("EXPIRY DATE"),
-    remarks: header.indexOf("REMARKS"),
-};
+        item: header.indexOf("ITEM"),
+        category: header.indexOf("CATEGORY"),
+        qty: header.indexOf("QTY"),
+        expiry: header.indexOf("EXPIRY DATE"),
+        remarks: header.indexOf("REMARKS"),
+    };
 
     if (columns.qty === -1 || columns.expiry === -1) {
         errors.push(`${sheetName}: required columns missing`);
@@ -413,6 +415,12 @@ for (const sheetName of fabSheets) {
         });
 
         if (!medicine) {
+            const category = String(row[columns.category] ?? "").trim();
+
+            if (!missingItems.has(itemName)) {
+                missingItems.set(itemName, category);
+            }
+
             errors.push(`${sheetName}: medicine not found: ${itemName}`);
             continue;
         }
@@ -442,6 +450,14 @@ for (const sheetName of fabSheets) {
 
     console.log(`Checked ${sheetName}`);
 }
+
+console.log("\n========== UNIQUE MISSING ITEMS ==========");
+
+for (const [item, category] of missingItems) {
+    console.log({ item, category });
+}
+
+console.log("Unique missing items:", missingItems.size);
 
 console.log("\n========== VALIDATION SUMMARY ==========");
 console.log(`Rows found: ${totalRows}`);
