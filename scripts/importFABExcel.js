@@ -447,3 +447,19 @@ if (errors.length > 0) {
 } else {
     console.log("\nAll rows passed validation. No data was written.");
 }
+
+console.log("\n========== PRODUCTION ZONE CHECK ==========");
+
+const allZones = await Zone.find({}, {
+    id: 1,
+    zone_name: 1
+}).sort({ zone_name: 1 }).lean();
+
+console.log("Zones found in production:", allZones.length);
+
+for (const zone of allZones) {
+    console.log({
+        id: zone.id,
+        zone_name: zone.zone_name
+    });
+}
