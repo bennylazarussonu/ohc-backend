@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import Medicines from "../models/Medicines.js";
@@ -73,12 +72,45 @@ try {
 
         if (existing) {
             console.log(
-                `EXISTS: ${item.drug_name_and_dose} (ID ${existing.id})`
+                `EXISTS: ${item.drug_name_and_dose} (ID ${existing.id})`,
             );
         } else {
             console.log("WOULD CREATE:", item);
         }
     }
+
+    console.log("Creating missing medicine records...");
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const item of missingItems) {
+        const existing = await Medicines.findOne({
+            drug_name_and_dose: item.drug_name_and_dose,
+        }).lean();
+
+        if (existing) {
+            console.log(
+                `SKIPPED: ${item.drug_name_and_dose} (ID ${existing.id})`,
+            );
+            skipped++;
+            continue;
+        }
+
+        const medicine = await Medicines.create({
+            drug_name_and_dose: item.drug_name_and_dose,
+            category: item.category,
+        });
+
+        console.log(
+            `CREATED: ${medicine.drug_name_and_dose} (ID ${medicine.id})`,
+        );
+        created++;
+    }
+
+    console.log("\n========== CREATION SUMMARY ==========");
+    console.log("Created:", created);
+    console.log("Skipped:", skipped);
 } catch (error) {
     console.error("Check failed:", error);
     process.exitCode = 1;
