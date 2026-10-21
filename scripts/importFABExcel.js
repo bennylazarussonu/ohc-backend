@@ -628,6 +628,32 @@ console.log(
     templates.filter(item => item.source_rows > 1).length
 );
 
+console.log("\n========== DUPLICATE CONSOLIDATION DETAILS ==========");
+
+for (const item of templates.filter(item => item.source_rows > 1)) {
+    console.log({
+        zone: item.zone_name,
+        item: item.item_name,
+        medicine_id: item.medicine_id,
+        source_rows: item.source_rows,
+        total_quantity: item.total_quantity,
+        required_quantity: item.required_quantity,
+    });
+
+    console.log(
+        "Original batches:",
+        importRows
+            .filter(row =>
+                row.zone_id === item.zone_id &&
+                row.medicine_id === item.medicine_id
+            )
+            .map(row => ({
+                quantity: row.quantity,
+                expiry_date: row.expiry_date,
+            }))
+    );
+}
+
 console.log("\nSample consolidated entries:");
 
 console.table(templates.slice(0, 15).map(item => ({
