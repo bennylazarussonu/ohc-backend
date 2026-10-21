@@ -335,6 +335,7 @@ let totalRows = 0;
 let validRows = 0;
 const errors = [];
 const missingItems = new Map();
+const importRows = [];
 
 for (const sheetName of fabSheets) {
     const zone = await Zone.findOne({ zone_name: sheetName });
@@ -445,6 +446,15 @@ for (const sheetName of fabSheets) {
             errors.push(`${sheetName}: invalid expiry for ${itemName}`);
             continue;
         }
+
+        importRows.push({
+    zone_id: zone.id,
+    zone_name: sheetName,
+    medicine_id: medicine.id,
+    item_name: itemName,
+    quantity,
+    expiry_date: expiry,
+});
 
         validRows++;
     }
@@ -573,3 +583,60 @@ if (duplicateItems.size === 0) {
     }
     console.log("Duplicate groups:", duplicateItems.size);
 }
+
+console.log("\n========== CONSOLIDATED IMPORT PREVIEW ==========");
+
+const templateMap = new Map();
+let zeroQuantityRows = 0;
+
+for (const row of importRows) {
+    const key = `${row.zone_id}:${row.medicine_id}`;
+
+    if (!templateMap.has(key)) {
+        templateMap.set(key, {
+            zone_id: row.zone_id,
+            zone_name: row.zone_name,
+            medicine_id: row.medicine_id,
+            item_name: row.item_name,
+            total_quantity: 0,
+            source_rows: 0,
+        });
+    }
+
+    const template = templateMap.get(key);
+
+    template.total_quantity += row.quantity;
+    template.source_rows += 1;
+
+    if (row.quantity === 0) {
+        zeroQuantityRows++;
+    }
+}
+
+const templates = [...templateMap.values()].map(item => ({
+    ...item,
+    required_quantity:
+        item.total_quantity === 0 ? 1 : item.total_quantity,
+}));
+
+console.log("Validated source rows:", importRows.length);
+console.log("Unique template entries:", templates.length);
+console.log("Opening batches to create:", importRows.length);
+console.log("Zero-quantity source rows:", zeroQuantityRows);
+console.log(
+    "Duplicate template groups:",
+    templates.filter(item => item.source_rows > 1).length
+);
+
+console.log("\nSample consolidated entries:");
+
+console.table(templates.slice(0, 15).map(item => ({
+    zone: item.zone_name,
+    item: item.item_name,
+    medicine_id: item.medicine_id,
+    source_rows: item.source_rows,
+    total_quantity: item.total_quantity,
+    required_quantity: item.required_quantity,
+})));
+
+console.log("\nPREVIEW ONLY — no database writes performed.");
