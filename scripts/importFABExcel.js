@@ -665,4 +665,70 @@ console.table(templates.slice(0, 15).map(item => ({
     required_quantity: item.required_quantity,
 })));
 
-console.log("\nPREVIEW ONLY — no database writes performed.");
+console.log("\n========== STARTING FAB IMPORT ==========");
+
+const session = await mongoose.startSession();
+
+try {
+    await session.withTransaction(async () => {
+        // Prevent accidental duplicate imports.
+        const existingTemplates = await FABTemplateItem.countDocuments({
+            zone_id: {
+                $in: [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24],
+            },
+        }).session(session);
+
+        const existingBatches = await FABInventoryBatch.countDocuments({
+            zone_id: {
+                $in: [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24],
+            },
+            source_type: "OPENING",
+            source_id: null,
+        }).session(session);
+
+        if (existingTemplates !== 0 || existingBatches !== 0) {
+            throw new Error(
+                `Import aborted: found ${existingTemplates} templates and ${existingBatches} opening batches.`
+            );
+        }
+
+        if (errors.length !== 0 || importRows.length !== 461 || templates.length !== 450) {
+            throw new Error("Import aborted: validation counts do not match the approved preview.");
+        }
+
+        await FABTemplateItem.insertMany(
+            templates.map((item) => ({
+                zone_id: item.zone_id,
+                medicine_id: item.medicine_id,
+                required_quantity: item.required_quantity,
+            })),
+            { session, ordered: true }
+        );
+
+        await FABInventoryBatch.insertMany(
+            importRows.map((row) => ({
+                zone_id: row.zone_id,
+                medicine_id: row.medicine_id,
+                source_type: "OPENING",
+                source_id: null,
+                item_name: row.item_name,
+                brand: "",
+                quantity: row.quantity,
+                expiry_date: row.expiry_date,
+                per_unit_cost: 0,
+                received_at: new Date(),
+            })),
+            { session, ordered: true }
+        );
+    });
+
+    console.log("FAB import completed successfully.");
+    console.log("Templates created:", templates.length);
+    console.log("Opening batches created:", importRows.length);
+} catch (error) {
+    console.error("FAB import failed:", error);
+    process.exitCode = 1;
+} finally {
+    await session.endSession();
+    await mongoose.disconnect();
+}
