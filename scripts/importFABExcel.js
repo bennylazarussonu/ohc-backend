@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import Zone from "../models/Zone.js";
 import Medicines from "../models/Medicines.js";
 import FABInventoryBatch from "../models/FABInventoryBatch.js";
+import FABTemplateItem from "../models/FABTemplateItem.js";
 import dotenv from "dotenv";
 
 const excelPath = process.argv[2];
@@ -492,3 +493,19 @@ for (const zone of allZones) {
         zone_name: zone.zone_name,
     });
 }
+
+
+console.log("\n========== EXISTING FAB RECORD CHECK ==========");
+
+const templateCount = await FABTemplateItem.countDocuments({
+    zone_id: { $in: [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24] }
+});
+
+const batchCount = await FABInventoryBatch.countDocuments({
+    zone_id: { $in: [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24] },
+    source_type: "OPENING",
+    source_id: null
+});
+
+console.log("Existing FAB template records:", templateCount);
+console.log("Existing opening inventory batches:", batchCount);
