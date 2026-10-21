@@ -509,3 +509,67 @@ const batchCount = await FABInventoryBatch.countDocuments({
 
 console.log("Existing FAB template records:", templateCount);
 console.log("Existing opening inventory batches:", batchCount);
+
+console.log("\nPREVIEW ONLY — no database writes performed.");
+
+console.log("\n========== DUPLICATE ITEM CHECK ==========");
+
+const duplicateItems = new Map();
+
+for (const sheetName of fabSheets) {
+    const sheet = workbook.Sheets[sheetName];
+
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: null
+    });
+
+    const headerRowIndex = rows.findIndex(row =>
+        row.some(cell =>
+            String(cell ?? "").trim().toUpperCase() === "ITEM"
+        )
+    );
+
+    if (headerRowIndex === -1) continue;
+
+    const header = rows[headerRowIndex].map(cell =>
+        String(cell ?? "").trim().toUpperCase()
+    );
+
+    const itemCol = header.indexOf("ITEM");
+    const remarksCol = header.indexOf("REMARKS");
+
+    const counts = new Map();
+
+    for (const row of rows.slice(headerRowIndex + 1)) {
+        const item = String(row[itemCol] ?? "").trim();
+        const remarks = String(row[remarksCol] ?? "")
+            .trim()
+            .toUpperCase();
+
+        if (
+            !item ||
+            item.toUpperCase().startsWith("NOTE:") ||
+            remarks === "N.A."
+        ) {
+            continue;
+        }
+
+        counts.set(item, (counts.get(item) || 0) + 1);
+    }
+
+    for (const [item, count] of counts) {
+        if (count > 1) {
+            duplicateItems.set(`${sheetName} :: ${item}`, count);
+        }
+    }
+}
+
+if (duplicateItems.size === 0) {
+    console.log("No duplicate item names found within selected zones.");
+} else {
+    for (const [key, count] of duplicateItems) {
+        console.log(`${key} — ${count} occurrences`);
+    }
+    console.log("Duplicate groups:", duplicateItems.size);
+}
