@@ -1130,6 +1130,684 @@ router.post("/stock-count", async (req, res) => {
     }
 });
 
+router.post("/save-inventory", async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+        const {
+            zone_id,
+            changes,
+            reason = "Inventory consumption",
+            consumed_by = "Unknown",
+            allocated_by = "Unknown"
+        } = req.body;
+
+        if (!Number.isInteger(Number(zone_id))) {
+            return res.status(400).json({
+                message: "zone_id must be a valid number"
+            });
+        }
+
+        if (!Array.isArray(changes) || changes.length === 0) {
+            return res.status(400).json({
+                message: "changes must be a non-empty array"
+            });
+        }
+
+        const zoneId = Number(zone_id);
+        const validatedChanges = [];
+
+        for (const item of changes) {
+            const medicineId = Number(item.medicine_id);
+            const consumedQuantity = Number(item.consumed_quantity || 0);
+            const allocationQuantity = Number(item.allocation_quantity || 0);
+
+            if (
+                !Number.isInteger(medicineId) ||
+                !Number.isInteger(consumedQuantity) ||
+                consumedQuantity < 0 ||
+                !Number.isInteger(allocationQuantity) ||
+                allocationQuantity < 0
+            ) {
+                return res.status(400).json({
+                    message: "Invalid medicine or quantity in changes"
+                });
+            }
+
+            validatedChanges.push({
+                medicine_id: medicineId,
+                consumed_quantity: consumedQuantity,
+                allocation_quantity: allocationQuantity
+            });
+        }
+
+        const medicineIds = validatedChanges.map(
+            item => item.medicine_id
+        );
+
+        if (new Set(medicineIds).size !== medicineIds.length) {
+            return res.status(400).json({
+                message: "Duplicate medicine entries are not allowed"
+            });
+        }
+
+        const zone = await Zone.findOne({ id: zoneId });
+
+        if (!zone) {
+            return res.status(404).json({
+                message: "FAB/Zone not found"
+            });
+        }
+
+        const visit = await FABVisit.findOne({
+            zone_id: zoneId,
+            status: "OPEN"
+        });
+
+        if (!visit) {
+            return res.status(400).json({
+                message: "No open visit found for this FAB"
+            });
+        }
+
+        for (const item of validatedChanges) {
+            const medicine = await Medicines.findOne({
+                id: item.medicine_id
+            });
+
+            if (!medicine) {
+                return res.status(404).json({
+                    message: `Medicine ${item.medicine_id} not found`
+                });
+            }
+        }
+
+        session.startTransaction();
+
+        const results = [];
+
+        for (const item of validatedChanges) {
+            const medicineId = item.medicine_id;
+            const consumptionQuantity = item.consumed_quantity;
+            const allocationQuantity = item.allocation_quantity;
+
+            // Get FAB inventory batches
+            const inventoryBatches = await FABInventoryBatch.find({
+                zone_id: zoneId,
+                medicine_id: medicineId,
+                quantity: { $gt: 0 }
+            }).session(session);
+
+            const totalFABStock = inventoryBatches.reduce(
+                (total, batch) => total + batch.quantity,
+                0
+            );
+
+            if (consumptionQuantity > totalFABStock) {
+                throw new Error(
+                    `Insufficient FAB stock for medicine ${medicineId}. Available: ${totalFABStock}, requested: ${consumptionQuantity}`
+                );
+            }
+
+            // Get central stock batches
+            const centralStockBatches = await Stock.find({
+                medicine_id: medicineId,
+                units: { $gt: 0 },
+                is_expired: false
+            }).session(session);
+
+            const totalCentralStock = centralStockBatches.reduce(
+                (total, stock) => total + stock.units,
+                0
+            );
+
+            if (allocationQuantity > totalCentralStock) {
+                throw new Error(
+                    `Insufficient central stock for medicine ${medicineId}. Available: ${totalCentralStock}, requested: ${allocationQuantity}`
+                );
+            }
+
+            // FEFO: consume FAB batches by earliest expiry
+            inventoryBatches.sort((a, b) => {
+                if (!a.expiry_date && b.expiry_date) return 1;
+                if (a.expiry_date && !b.expiry_date) return -1;
+
+                if (a.expiry_date && b.expiry_date) {
+                    const difference =
+                        new Date(a.expiry_date) - new Date(b.expiry_date);
+
+                    if (difference !== 0) return difference;
+                }
+
+                return new Date(a.received_at || 0) -
+                    new Date(b.received_at || 0);
+            });
+
+            let remainingToConsume = consumptionQuantity;
+
+            for (const batchData of inventoryBatches) {
+                if (remainingToConsume <= 0) break;
+
+                const batch = await FABInventoryBatch.findById(
+                    batchData._id
+                ).session(session);
+
+                if (!batch || batch.quantity <= 0) continue;
+
+                const quantity = Math.min(
+                    batch.quantity,
+                    remainingToConsume
+                );
+
+                batch.quantity -= quantity;
+                await batch.save({ session });
+
+                const consumption = new FABConsumption({
+                    visit_id: visit._id,
+                    zone_id: zoneId,
+                    medicine_id: medicineId,
+                    inventory_batch_id: batch._id,
+                    item_name: batch.item_name,
+                    brand: batch.brand || "",
+                    quantity,
+                    expiry_date: batch.expiry_date || null,
+                    per_unit_cost: batch.per_unit_cost || 0,
+                    reason,
+                    consumed_by,
+                    consumed_at: new Date()
+                });
+
+                await consumption.save({ session });
+
+                remainingToConsume -= quantity;
+            }
+
+            // FEFO: allocate central stock by earliest expiry
+            centralStockBatches.sort((a, b) => {
+                if (!a.expiry_date && b.expiry_date) return 1;
+                if (a.expiry_date && !b.expiry_date) return -1;
+
+                if (a.expiry_date && b.expiry_date) {
+                    const difference =
+                        new Date(a.expiry_date) - new Date(b.expiry_date);
+
+                    if (difference !== 0) return difference;
+                }
+
+                return new Date(a.procurement_date || 0) -
+                    new Date(b.procurement_date || 0);
+            });
+
+            let remainingToAllocate = allocationQuantity;
+
+            for (const stock of centralStockBatches) {
+                if (remainingToAllocate <= 0) break;
+
+                const quantity = Math.min(
+                    stock.units,
+                    remainingToAllocate
+                );
+
+                stock.units -= quantity;
+                await stock.save({ session });
+
+                const inventoryBatch = new FABInventoryBatch({
+                    zone_id: zoneId,
+                    medicine_id: medicineId,
+                    source_type: "CENTRAL_STOCK",
+                    source_id: stock.id,
+                    item_name: stock.item_name,
+                    brand: stock.brand || "",
+                    quantity,
+                    expiry_date: stock.expiry_date || null,
+                    per_unit_cost: stock.per_unit_cost || 0,
+                    received_at: new Date()
+                });
+
+                await inventoryBatch.save({ session });
+
+                const allocation = new FABAllocation({
+                    visit_id: visit._id,
+                    zone_id: zoneId,
+                    medicine_id: medicineId,
+                    stock_id: stock.id,
+                    item_name: stock.item_name,
+                    brand: stock.brand || "",
+                    quantity,
+                    expiry_date: stock.expiry_date || null,
+                    per_unit_cost: stock.per_unit_cost || 0,
+                    allocated_by,
+                    allocated_at: new Date()
+                });
+
+                await allocation.save({ session });
+
+                remainingToAllocate -= quantity;
+            }
+
+            results.push({
+                medicine_id: medicineId,
+                consumed_quantity: consumptionQuantity,
+                allocated_quantity: allocationQuantity,
+                status: "SUCCESS"
+            });
+        }
+
+        await session.commitTransaction();
+
+        return res.status(201).json({
+            message: "FAB inventory changes saved successfully",
+            results
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+
+        console.error("FAB inventory save error:", error);
+
+        return res.status(400).json({
+            message: error.message || "Failed to save FAB inventory changes"
+        });
+
+    } finally {
+        await session.endSession();
+    }
+});
+
+router.post("/reconcile", async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+        const {
+            zone_id,
+            counts,
+            reason = "Physical stock count",
+            counted_by = "Unknown",
+            allocated_by = "Unknown",
+        } = req.body;
+
+        // --------------------------------------------------
+        // 1. Validate request
+        // --------------------------------------------------
+
+        if (!Number.isInteger(Number(zone_id))) {
+            return res.status(400).json({
+                message: "zone_id must be a valid number",
+            });
+        }
+
+        if (!Array.isArray(counts) || counts.length === 0) {
+            return res.status(400).json({
+                message: "counts must be a non-empty array",
+            });
+        }
+
+        const zoneId = Number(zone_id);
+
+        const validatedCounts = [];
+
+        for (const item of counts) {
+            if (
+                item.counted_quantity === "" ||
+                item.counted_quantity === null ||
+                item.counted_quantity === undefined ||
+                !Number.isInteger(Number(item.medicine_id)) ||
+                !Number.isInteger(Number(item.counted_quantity)) ||
+                Number(item.counted_quantity) < 0
+            ) {
+                return res.status(400).json({
+                    message:
+                        "Each item must contain a valid medicine_id and counted_quantity",
+                });
+            }
+
+            const allocationQuantity =
+                item.allocation_quantity === "" ||
+                item.allocation_quantity === null ||
+                item.allocation_quantity === undefined
+                    ? 0
+                    : Number(item.allocation_quantity);
+
+            if (
+                !Number.isInteger(allocationQuantity) ||
+                allocationQuantity < 0
+            ) {
+                return res.status(400).json({
+                    message:
+                        "allocation_quantity must be a non-negative integer",
+                    medicine_id: Number(item.medicine_id),
+                });
+            }
+
+            validatedCounts.push({
+                medicine_id: Number(item.medicine_id),
+                counted_quantity: Number(item.counted_quantity),
+                allocation_quantity: allocationQuantity,
+            });
+        }
+
+        // Prevent duplicate medicine entries in one request.
+        const medicineIds = validatedCounts.map(
+            (item) => item.medicine_id
+        );
+
+        if (new Set(medicineIds).size !== medicineIds.length) {
+            return res.status(400).json({
+                message: "Duplicate medicine entries are not allowed",
+            });
+        }
+
+        // --------------------------------------------------
+        // 2. Verify FAB and open visit
+        // --------------------------------------------------
+
+        const zone = await Zone.findOne({
+            id: zoneId,
+        }).session(session);
+
+        if (!zone) {
+            return res.status(404).json({
+                message: "FAB/Zone not found",
+            });
+        }
+
+        const visit = await FABVisit.findOne({
+            zone_id: zoneId,
+            status: "OPEN",
+        }).session(session);
+
+        if (!visit) {
+            return res.status(400).json({
+                message: "No open visit found for this FAB",
+            });
+        }
+
+        // --------------------------------------------------
+        // 3. Verify all medicines
+        // --------------------------------------------------
+
+        for (const item of validatedCounts) {
+            const medicine = await Medicines.findOne({
+                id: item.medicine_id,
+            }).session(session);
+
+            if (!medicine) {
+                return res.status(404).json({
+                    message: `Medicine ${item.medicine_id} not found`,
+                });
+            }
+        }
+
+        // --------------------------------------------------
+        // 4. Start transaction
+        // --------------------------------------------------
+
+        session.startTransaction();
+
+        const results = [];
+
+        // --------------------------------------------------
+        // 5. Process each medicine
+        // --------------------------------------------------
+
+        for (const item of validatedCounts) {
+            const medicineId = item.medicine_id;
+            const countedQuantity = item.counted_quantity;
+            const allocationQuantity = item.allocation_quantity;
+
+            // Get current FAB inventory
+            const inventoryBatches = await FABInventoryBatch.find({
+                zone_id: zoneId,
+                medicine_id: medicineId,
+                quantity: { $gt: 0 },
+            })
+                .session(session);
+
+            const currentQuantity = inventoryBatches.reduce(
+                (total, batch) => total + batch.quantity,
+                0
+            );
+
+            // --------------------------------------------------
+            // 6. Skip if physical quantity exceeds system quantity
+            // --------------------------------------------------
+
+            if (countedQuantity > currentQuantity) {
+                results.push({
+                    medicine_id: medicineId,
+                    system_quantity: currentQuantity,
+                    counted_quantity: countedQuantity,
+                    allocation_quantity: allocationQuantity,
+                    status: "SKIPPED_PHYSICAL_GREATER_THAN_SYSTEM",
+                });
+
+                continue;
+            }
+
+            // --------------------------------------------------
+            // 7. Consume the difference using FEFO
+            // --------------------------------------------------
+
+            const consumptionQuantity =
+                currentQuantity - countedQuantity;
+
+            if (consumptionQuantity > 0) {
+                // Dated batches first, earliest expiry first.
+                inventoryBatches.sort((a, b) => {
+                    if (!a.expiry_date && b.expiry_date) return 1;
+                    if (a.expiry_date && !b.expiry_date) return -1;
+
+                    if (
+                        a.expiry_date &&
+                        b.expiry_date &&
+                        new Date(a.expiry_date) - new Date(b.expiry_date) !== 0
+                    ) {
+                        return (
+                            new Date(a.expiry_date) -
+                            new Date(b.expiry_date)
+                        );
+                    }
+
+                    return (
+                        new Date(a.received_at || 0) -
+                        new Date(b.received_at || 0)
+                    );
+                });
+
+                let remainingToConsume = consumptionQuantity;
+
+                for (const batchData of inventoryBatches) {
+                    if (remainingToConsume <= 0) break;
+
+                    const batch = await FABInventoryBatch.findById(
+                        batchData._id
+                    ).session(session);
+
+                    if (!batch || batch.quantity <= 0) continue;
+
+                    const quantityFromBatch = Math.min(
+                        batch.quantity,
+                        remainingToConsume
+                    );
+
+                    batch.quantity -= quantityFromBatch;
+
+                    await batch.save({ session });
+
+                    const consumption = new FABConsumption({
+                        visit_id: visit._id,
+                        zone_id: zoneId,
+                        medicine_id: medicineId,
+                        inventory_batch_id: batch._id,
+                        item_name: batch.item_name,
+                        brand: batch.brand || "",
+                        quantity: quantityFromBatch,
+                        expiry_date: batch.expiry_date || null,
+                        per_unit_cost: batch.per_unit_cost || 0,
+                        reason,
+                        consumed_by: counted_by,
+                        consumed_at: new Date(),
+                    });
+
+                    await consumption.save({ session });
+
+                    remainingToConsume -= quantityFromBatch;
+                }
+
+                if (remainingToConsume > 0) {
+                    throw new Error(
+                        `Unable to consume the full difference for medicine ${medicineId}`
+                    );
+                }
+            }
+
+            // --------------------------------------------------
+            // 8. Allocate from central stock using FEFO
+            // --------------------------------------------------
+
+            if (allocationQuantity > 0) {
+                const centralStockBatches = await Stock.find({
+                    medicine_id: medicineId,
+                    units: { $gt: 0 },
+                    is_expired: false,
+                }).session(session);
+
+                centralStockBatches.sort((a, b) => {
+                    if (!a.expiry_date && b.expiry_date) return 1;
+                    if (a.expiry_date && !b.expiry_date) return -1;
+
+                    if (
+                        a.expiry_date &&
+                        b.expiry_date &&
+                        new Date(a.expiry_date) - new Date(b.expiry_date) !== 0
+                    ) {
+                        return (
+                            new Date(a.expiry_date) -
+                            new Date(b.expiry_date)
+                        );
+                    }
+
+                    return (
+                        new Date(a.procurement_date || 0) -
+                        new Date(b.procurement_date || 0)
+                    );
+                });
+
+                const totalCentralStock = centralStockBatches.reduce(
+                    (total, stock) => total + stock.units,
+                    0
+                );
+
+                if (totalCentralStock < allocationQuantity) {
+                    throw new Error(
+                        `Insufficient central stock for medicine ${medicineId}. Available: ${totalCentralStock}, requested: ${allocationQuantity}`
+                    );
+                }
+
+                let remainingToAllocate = allocationQuantity;
+
+                for (const stock of centralStockBatches) {
+                    if (remainingToAllocate <= 0) break;
+
+                    const quantityFromStock = Math.min(
+                        stock.units,
+                        remainingToAllocate
+                    );
+
+                    stock.units -= quantityFromStock;
+
+                    await stock.save({ session });
+
+                    // Create FAB inventory batch
+                    const inventoryBatch = new FABInventoryBatch({
+                        zone_id: zoneId,
+                        medicine_id: medicineId,
+                        source_type: "CENTRAL_STOCK",
+                        source_id: stock.id,
+                        item_name: stock.item_name,
+                        brand: stock.brand || "",
+                        quantity: quantityFromStock,
+                        expiry_date: stock.expiry_date || null,
+                        per_unit_cost: stock.per_unit_cost || 0,
+                        received_at: new Date(),
+                    });
+
+                    await inventoryBatch.save({ session });
+
+                    // Create allocation record
+                    const allocation = new FABAllocation({
+                        visit_id: visit._id,
+                        zone_id: zoneId,
+                        medicine_id: medicineId,
+                        stock_id: stock.id,
+                        item_name: stock.item_name,
+                        brand: stock.brand || "",
+                        quantity: quantityFromStock,
+                        expiry_date: stock.expiry_date || null,
+                        per_unit_cost: stock.per_unit_cost || 0,
+                        allocated_by,
+                        allocated_at: new Date(),
+                    });
+
+                    await allocation.save({ session });
+
+                    remainingToAllocate -= quantityFromStock;
+                }
+            }
+
+            // --------------------------------------------------
+            // 9. Record successful result
+            // --------------------------------------------------
+
+            results.push({
+                medicine_id: medicineId,
+                previous_quantity: currentQuantity,
+                counted_quantity: countedQuantity,
+                consumed_quantity: consumptionQuantity,
+                allocated_quantity: allocationQuantity,
+                final_quantity:
+                    countedQuantity + allocationQuantity,
+                status: "SUCCESS",
+            });
+        }
+
+        // --------------------------------------------------
+        // 10. Commit transaction
+        // --------------------------------------------------
+
+        await session.commitTransaction();
+
+        const skippedCount = results.filter(
+            (item) =>
+                item.status === "SKIPPED_PHYSICAL_GREATER_THAN_SYSTEM"
+        ).length;
+
+        return res.status(201).json({
+            message:
+                skippedCount > 0
+                    ? "Reconciliation saved. Some medicines were skipped."
+                    : "Reconciliation saved successfully.",
+            total_medicines: results.length,
+            skipped_medicines: skippedCount,
+            results,
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+
+        return res.status(400).json({
+            message: error.message || "Failed to reconcile FAB inventory",
+        });
+
+    } finally {
+        await session.endSession();
+    }
+});
+
 router.get("/consumption/:zone_id", async (req, res) => {
     try {
         const zoneId = Number(req.params.zone_id);
